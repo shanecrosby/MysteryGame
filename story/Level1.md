@@ -66,37 +66,36 @@
 Each narration block follows this structure for voice rendering:
 
 [NARRATION]
-Voice Tone: <tone/emotion keywords>
 Duration: <approx seconds>
 Text: "<spoken line>"
+Sound file: <file name>
 
 [INTERACTION]
 Trigger: <what triggers the line>
-Voice Tone: <tone/emotion>
 Text: "<spoken line>"
 
 [DIALOGUE]
 Character: <name>
-Voice Tone: <emotion/style>
 Text: "<spoken line>"
 
 
 ---
+
+## Pre-Game Narration
+
+[NARRATION]
+Duration: 38s
+Text: "You are Kai, a trainee in the Frostbeat K-Pop Demon Hunter Squad, a group that uses music-powered magic to protect the world from sound-based spirits called Noisemancers. Someone has stolen the Melody Crystal, a magical source of rhythm that powers your squad’s music and keeps dark forces away. Without it, your snow base is freezing over and your team is losing their groove. Your mission: Follow the footprints, gather clues, uncover the truth, and restore the Melody Crystal."
+Sound file: Intro.mp3
 
 ## Narration for Level 1
 
 ### Opening Narration
 
 [NARRATION]
-Voice Tone: calm, mysterious, winter atmosphere
-Duration: 7s
-Text: "Snow fell softly over the Frostbeat Outpost. The world was quiet, almost too quiet… and the Melody Crystal was gone."
-
-[NARRATION]
-Voice Tone: curious, gentle
-Duration: 6s
-Text: "Someone had left in a hurry. The only sign of what happened… was a trail of footprints leading into the snow."
-
+Duration: 21s
+Text: "Snow fell softly over the Frostbeat Outpost. The world was quiet, almost too quiet… and the Melody Crystal was gone. Someone had left in a hurry. The only sign of what happened… was a trail of footprints leading into the snow."
+Sound file: Scene1Intro.mp3
 
 ---
 
@@ -106,53 +105,55 @@ Text: "Someone had left in a hurry. The only sign of what happened… was a trai
 
 [INTERACTION]
 Trigger: Click footprints
-Voice Tone: investigative, low intensity
+Duration: 10s
 Text: "These footprints are strange… too sharp to be human, but too small to be a monster. Who could they belong to?"
-
+Sound file: StrangeFootprints.mp3
 
 #### Collect Fabric Scrap (Clue 2)
 
 [INTERACTION]
 Trigger: Click purple fabric
-Voice Tone: surprised discovery
+Duration: 8s
 Text: "A torn piece of fabric… purple. Isn’t this the colour of Team Starflare's stage outfits?"
-
+Sound file: TornFabricClue.mp3
 
 #### Inspect Headphone Jack (Clue 3)
 
 [INTERACTION]
 Trigger: Click metal object
-Voice Tone: thoughtful
+Duration: 7s
 Text: "A broken headphone jack? This is Frostbeat tech. Someone from the squad was definitely here."
-
+Sound file: BrokenHeadphoneClue.mp3
 
 #### Optional – Inspect Campfire
 
 [INTERACTION]
 Trigger: Click campfire
-Voice Tone: warm, reflective
+Duration: 5s
 Text: "A campfire… still warm. Whoever was here left not long ago."
-
+Sound file: CampfireClue.mp3
 
 ---
 
 ### Tutorial Prompts
 
 [NARRATION]
-Trigger: First interaction
-Voice Tone: tutorial, friendly
+Trigger: First click not on a clue
+Duration: 4s
 Text: "Try clicking objects to investigate. Some may hold clues."
+Sound file: HowTo.mp3
 
 [NARRATION]
 Trigger: First clue found
-Voice Tone: supportive
-Text: "Great! You found your first clue. Keep searching the area."
+Duration: 4s
+Text: "Great Work! You found your first clue. Keep searching the area."
+Sound file: FoundFirstClue.mp3
 
 [NARRATION]
 Trigger: After all clues collected
-Voice Tone: story progression
+Duration: 6s
 Text: "That's enough clues for now… time to follow the footprints and uncover the truth."
-
+Sound file: EnoughCluesLevel1.mp3
 
 ---
 
@@ -160,9 +161,9 @@ Text: "That's enough clues for now… time to follow the footprints and uncover 
 
 [NARRATION]
 Trigger: Exit zone unlocked
-Voice Tone: dramatic, building energy
+Duration: 7s
 Text: "The trail leads into Frostpine Forest. The Melody Crystal is out there… and so is the truth."
-
+Sound file: FollowTrail.mp3
 
 ---
 

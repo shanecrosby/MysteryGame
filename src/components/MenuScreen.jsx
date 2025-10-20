@@ -1,11 +1,9 @@
-import NightSky from './NightSky';
-import Icicles from './Icicles';
+import MenuScene3D from './MenuScene3D';
 
 export default function MenuScreen({ onNewGame }) {
   return (
     <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628] via-[#1a2847] to-[#2a3856] overflow-hidden">
-      <NightSky />
-      <Icicles />
+      <MenuScene3D />
 
       <div className="relative z-[5] flex flex-col items-center justify-center h-full px-5">
         {/* Title */}
