@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(timeout 5 bash -c \"sleep 5\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
