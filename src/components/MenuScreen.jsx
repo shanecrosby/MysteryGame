@@ -6,10 +6,11 @@ export default function MenuScreen({ onNewGame }) {
       <MenuScene3D />
 
       <div className="relative z-[5] flex flex-col items-center justify-center h-full px-5">
-        {/* Title */}
+        {/* Title - shifted up by 25% */}
         <h1 className="text-6xl md:text-5xl font-black text-center text-yellow-400 mb-16 md:mb-10
           tracking-wider leading-tight
-          [text-shadow:3px_3px_6px_rgba(0,0,0,0.8),0_0_20px_rgba(255,215,0,0.6),0_0_40px_rgba(255,215,0,0.4)]">
+          [text-shadow:3px_3px_6px_rgba(0,0,0,0.8),0_0_20px_rgba(255,215,0,0.6),0_0_40px_rgba(255,215,0,0.4)]
+          transform -translate-y-[25vh]">
           K-Pop Demon Hunter<br />Mysteries
         </h1>
 

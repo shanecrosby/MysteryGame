@@ -1,16 +1,24 @@
+import { useMemo } from 'react';
+
 export default function Icicles() {
   // Generate random icicle positions for a more natural look
-  const topIcicles = Array.from({ length: 20 }, (_, i) => ({
-    left: `${i * 5}%`,
-    height: `${20 + Math.random() * 30}px`,
-    delay: `${Math.random() * 2}s`,
-  }));
+  // useMemo ensures these values stay constant across re-renders
+  const topIcicles = useMemo(() =>
+    Array.from({ length: 20 }, (_, i) => ({
+      left: `${i * 5}%`,
+      height: `${20 + Math.random() * 30}px`,
+      delay: `${Math.random() * 2}s`,
+    }))
+  , []);
 
   // Generate snow mounds with varying heights
-  const snowMounds = Array.from({ length: 30 }, (_, i) => ({
-    left: `${i * 3.33}%`,
-    height: `${15 + Math.random() * 25}px`,
-  }));
+  // useMemo ensures these values stay constant across re-renders
+  const snowMounds = useMemo(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      left: `${i * 3.33}%`,
+      height: `${15 + Math.random() * 25}px`,
+    }))
+  , []);
 
   return (
     <>

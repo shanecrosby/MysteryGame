@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Level1Scene3D from './Level1Scene3D';
 import CluesSidebar from './CluesSidebar';
+import LoadingScreen from './LoadingScreen';
 import useAudioPlayer from '../hooks/useAudioPlayer';
+import useAssetLoader from '../hooks/useAssetLoader';
 import { SCENES } from '../data/scenes';
 
 export default function GameScreen({ currentScene, onSceneComplete, onGameComplete, onReturnToMenu }) {
@@ -19,52 +21,104 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
   const scene = currentScene < SCENES.length ? SCENES[currentScene] : null;
   const isVictory = currentScene >= SCENES.length;
 
+  // Reset assets loaded state when scene changes
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  useEffect(() => {
+    setAssetsLoaded(false);
+  }, [currentScene]);
+
+  // Collect all audio files for this scene
+  const audioFiles = useMemo(() => {
+    if (!scene) return [];
+
+    const files = [];
+
+    // Narration audio
+    if (scene.narration?.intro?.audio) files.push(scene.narration.intro.audio);
+    if (scene.narration?.scene?.audio) files.push(scene.narration.scene.audio);
+
+    // Clue audio
+    scene.clues?.forEach(clue => {
+      if (clue.narration?.audio) files.push(clue.narration.audio);
+    });
+
+    // Tutorial audio
+    scene.tutorials?.forEach(tutorial => {
+      if (tutorial.audio) files.push(tutorial.audio);
+    });
+
+    // Exit narration
+    if (scene.exitNarration?.audio) files.push(scene.exitNarration.audio);
+
+    return files;
+  }, [scene]);
+
+  // Preload assets only when we have a valid scene
+  const { isLoading, progress } = useAssetLoader(
+    scene ? audioFiles : [],
+    scene ? [
+      'https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg',
+      'https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg'
+    ] : []
+  );
+
   // Unlock audio on component mount (user clicked Start Game button)
   useEffect(() => {
     unlock();
   }, [unlock]);
 
-  // Initialize scene clues
+  // Mark assets as loaded when loading completes
   useEffect(() => {
-    if (scene && scene.clues) {
-      setClues(scene.clues.map(clue => ({ ...clue, collected: false })));
-      setCollectedClues([]);
-      setTutorialShown({
-        first_click: false,
-        first_clue: false,
-        all_clues: false
-      });
-
-      // Play intro narration if available
-      if (scene.narration && scene.narration.intro) {
-        setNarrationText(scene.narration.intro.text);
-        play(scene.narration.intro.audio);
-
-        // Auto-hide intro after duration and show scene narration with 1s buffer
-        setTimeout(() => {
-          if (scene.narration.scene) {
-            setNarrationText(scene.narration.scene.text);
-            play(scene.narration.scene.audio);
-          }
-        }, (scene.narration.intro.duration + 2) * 1000);
-      } else if (scene.narration && scene.narration.scene) {
-        setNarrationText(scene.narration.scene.text);
-        play(scene.narration.scene.audio);
-      } else {
-        setNarrationText(scene.story);
-      }
+    if (!isLoading && !assetsLoaded) {
+      setAssetsLoaded(true);
     }
-  }, [currentScene, scene, play]);
+  }, [isLoading, assetsLoaded]);
+
+  // Initialize scene clues and start audio sequence AFTER assets are loaded
+  useEffect(() => {
+    if (!assetsLoaded || !scene || !scene.clues) return;
+
+    setClues(scene.clues.map(clue => ({ ...clue, collected: false })));
+    setCollectedClues([]);
+    setTutorialShown({
+      first_click: false,
+      first_clue: false,
+      all_clues: false
+    });
+
+    // Play intro narration immediately after loading
+    if (scene.narration?.intro) {
+      setNarrationText(scene.narration.intro.text);
+      play(scene.narration.intro.audio);
+
+      // Play scene narration after intro with 1 second pause
+      if (scene.narration.scene) {
+        setTimeout(() => {
+          setNarrationText(scene.narration.scene.text);
+          play(scene.narration.scene.audio);
+        }, (scene.narration.intro.duration + 1) * 1000);
+      }
+    } else if (scene.narration?.scene) {
+      setNarrationText(scene.narration.scene.text);
+      play(scene.narration.scene.audio);
+    } else {
+      setNarrationText(scene.story);
+    }
+  }, [assetsLoaded, currentScene, scene, play]);
 
   // Handle clue click
   const handleClueClick = (clickedClue) => {
-    // Show first click tutorial if not shown
-    if (!tutorialShown.first_click && scene.tutorials) {
+    // Check if this is the very first click (show HowTo tutorial)
+    const isFirstClick = !tutorialShown.first_click && collectedClues.length === 0;
+
+    if (isFirstClick && scene.tutorials) {
       const tutorial = scene.tutorials.find(t => t.trigger === 'first_click');
       if (tutorial) {
         setNarrationText(tutorial.text);
         play(tutorial.audio);
         setTutorialShown(prev => ({ ...prev, first_click: true }));
+        // Don't process the clue yet, just show the tutorial
+        return;
       }
     }
 
@@ -84,10 +138,11 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
       play(clickedClue.narration.audio);
     }
 
-    // Show first clue tutorial if not shown
+    // Show first clue tutorial ONLY after collecting the first actual clue
     if (newCollectedClues.length === 1 && !tutorialShown.first_clue && scene.tutorials) {
       const tutorial = scene.tutorials.find(t => t.trigger === 'first_clue');
       if (tutorial) {
+        // Wait for clue narration + 1 second pause
         setTimeout(() => {
           setNarrationText(tutorial.text);
           play(tutorial.audio);
@@ -98,6 +153,16 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
 
     // Check if all clues collected
     if (newCollectedClues.length === scene.clues.length) {
+      let delay = (clickedClue.narration?.duration || 3) * 1000 + 1000; // Clue + 1s pause
+
+      // If this was the first clue, account for the FoundFirstClue audio too
+      if (newCollectedClues.length === 1 && scene.tutorials) {
+        const firstClueTutorial = scene.tutorials.find(t => t.trigger === 'first_clue');
+        if (firstClueTutorial) {
+          delay += firstClueTutorial.duration * 1000 + 1000; // Add first clue tutorial + 1s pause
+        }
+      }
+
       if (!tutorialShown.all_clues && scene.tutorials) {
         const tutorial = scene.tutorials.find(t => t.trigger === 'all_clues');
         if (tutorial) {
@@ -105,19 +170,27 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
             setNarrationText(tutorial.text);
             play(tutorial.audio);
             setTutorialShown(prev => ({ ...prev, all_clues: true }));
-          }, (clickedClue.narration?.duration || 3) * 1000 + 1000);
+          }, delay);
+
+          // Add delay for exit narration
+          delay += tutorial.duration * 1000 + 1000;
         }
       }
 
-      // Show exit narration and allow progression
+      // Show exit narration after all clues tutorial
       if (scene.exitNarration) {
         setTimeout(() => {
           setNarrationText(scene.exitNarration.text);
           play(scene.exitNarration.audio);
-        }, (clickedClue.narration?.duration || 3) * 1000 + 3000);
+        }, delay);
       }
     }
   };
+
+  // Show loading screen while assets are loading
+  if (isLoading) {
+    return <LoadingScreen progress={progress} />;
+  }
 
   if (isVictory) {
     return (

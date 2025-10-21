@@ -1,104 +1,290 @@
-import { Canvas, useThree } from '@react-three/fiber';
-import { Stars, PerspectiveCamera } from '@react-three/drei';
-import { Suspense, useState, useEffect, useMemo } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { PerspectiveCamera } from '@react-three/drei';
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { PurpleFabricClue, HeadphoneJackClue } from './ClueObjects3D';
 import * as THREE from 'three';
+import particleFire from 'three-particle-fire';
 
-// Falling snowflakes
-function Snowflakes() {
-  const count = 300;
-  const positions = new Float32Array(count * 3);
+// Initialize particle fire
+particleFire.install({ THREE: THREE });
 
-  for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 50;
-    positions[i * 3 + 1] = Math.random() * 30 - 5;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
-  }
+// Night sky background - compensating for horizontal stretching
+function NightSkyBackground() {
+  const skyTexture = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load('/src/images/nightsky.jpg');
+    // Set wrapping and repeat to compensate for stretching
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    // Repeat the texture horizontally to reduce stretching
+    texture.repeat.set(2.5, 1);
+    // Offset to hide seam outside viewport (25% = 0.25, or ~90 degrees)
+    texture.offset.set(0.25, 0);
+    return texture;
+  }, []);
 
   return (
-    <points>
+    <mesh position={[0, 125, 0]}>
+      {/* Use a large cylinder for rectangular skybox image - shifted up 25% */}
+      <cylinderGeometry args={[500, 500, 500, 48, 1, true]} />
+      <meshBasicMaterial
+        map={skyTexture}
+        side={THREE.BackSide}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
+// Animated falling snowflakes component
+function Snowflakes() {
+  const count = 300;
+  const pointsRef = useRef();
+
+  // Generate initial positions and velocities
+  const particleData = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    const velocities = [];
+
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 50; // x
+      positions[i * 3 + 1] = Math.random() * 30 + 5; // y - start above
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 50; // z
+
+      // Random fall speed and drift
+      velocities.push({
+        y: -0.02 - Math.random() * 0.03, // Fall speed
+        x: (Math.random() - 0.5) * 0.01, // Horizontal drift
+        z: (Math.random() - 0.5) * 0.01
+      });
+    }
+
+    return { positions, velocities };
+  }, [count]);
+
+  // Animate snowflakes falling
+  useFrame(() => {
+    if (!pointsRef.current) return;
+
+    const positions = pointsRef.current.geometry.attributes.position.array;
+
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+
+      // Update positions
+      positions[i3] += particleData.velocities[i].x; // x
+      positions[i3 + 1] += particleData.velocities[i].y; // y
+      positions[i3 + 2] += particleData.velocities[i].z; // z
+
+      // Reset snowflake to top when it falls below ground
+      if (positions[i3 + 1] < -5) {
+        positions[i3 + 1] = 35;
+        positions[i3] = (Math.random() - 0.5) * 50;
+        positions[i3 + 2] = (Math.random() - 0.5) * 50;
+      }
+
+      // Keep snowflakes in bounds horizontally
+      if (Math.abs(positions[i3]) > 25) {
+        positions[i3] = (Math.random() - 0.5) * 50;
+      }
+      if (Math.abs(positions[i3 + 2]) > 25) {
+        positions[i3 + 2] = (Math.random() - 0.5) * 50;
+      }
+    }
+
+    pointsRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pointsRef}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
           count={count}
-          array={positions}
+          array={particleData.positions}
           itemSize={3}
         />
       </bufferGeometry>
       <pointsMaterial
-        size={0.08}
+        size={0.12}
         color="#ffffff"
         transparent
-        opacity={0.7}
+        opacity={0.8}
         sizeAttenuation
       />
     </points>
   );
 }
 
-// Moon
+// Moon with NASA texture maps - bright and emissive like menu screen
 function Moon() {
+  const [moonTexture, displacementMap] = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+
+    // Load NASA moon texture
+    const texture = textureLoader.load(
+      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg"
+    );
+
+    // Load displacement map
+    const displacement = textureLoader.load(
+      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg"
+    );
+
+    return [texture, displacement];
+  }, []);
+
   return (
     <group position={[8, 6, -15]}>
       <mesh>
-        <sphereGeometry args={[1.2, 32, 32]} />
+        <sphereGeometry args={[1.2, 64, 64]} />
         <meshStandardMaterial
-          color="#fefcd7"
-          emissive="#f0e68c"
-          emissiveIntensity={0.8}
+          map={moonTexture}
+          displacementMap={displacementMap}
+          displacementScale={0.06}
+          bumpMap={displacementMap}
+          bumpScale={0.04}
+          roughness={0.9}
+          metalness={0}
+          emissive="#fefcd7"
+          emissiveIntensity={0.9}
+          emissiveMap={moonTexture}
         />
       </mesh>
-      <pointLight intensity={0.8} distance={30} color="#fefcd7" />
+      {/* Strong directional light simulating sun illuminating the moon */}
+      <directionalLight
+        position={[2, 1, 5]}
+        intensity={0.6}
+        color="#eeeeff"
+        target-position={[0, 0, 0]}
+      />
+      {/* Moon's light illuminating the scene */}
+      <pointLight intensity={0.8} distance={50} color="#e8f4ff" />
     </group>
   );
 }
 
-// Outpost building - FIXED: aligned to ground, roof rotated, icicles flipped
+// Snowy Cottage - Enhanced building with more detail
 function Outpost() {
+  const iciclePositions = useMemo(() =>
+    Array.from({ length: 16 }, (_, i) => ({
+      angle: (i / 12) * Math.PI * 2,
+      length: 0.4 + Math.random() * 0.4
+    }))
+  , []);
+
   return (
     <group position={[-6, -5, -8]}>
-      {/* Main building - sits on ground */}
+      {/* Main building - wooden cottage */}
       <mesh position={[0, 1.5, 0]} castShadow>
         <boxGeometry args={[4, 3, 4]} />
         <meshStandardMaterial color="#8b7355" roughness={0.9} />
       </mesh>
 
-      {/* Roof - rotated 45 degrees, positioned on top of building */}
+      {/* Wood planks texture simulation */}
+      {Array.from({ length: 8 }, (_, i) => (
+        <mesh key={`plank-${i}`} position={[0, 0.2 + i * 0.4, 2.02]}>
+          <boxGeometry args={[4, 0.05, 0.01]} />
+          <meshStandardMaterial color="#6d5d47" roughness={0.95} />
+        </mesh>
+      ))}
+
+      {/* Roof - snow-covered with overhang */}
       <mesh position={[0, 3.75, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[3, 1.5, 4]} />
-        <meshStandardMaterial color="#654321" roughness={0.8} />
+        <coneGeometry args={[3.2, 1.8, 4]} />
+        <meshStandardMaterial color="#efeffe" roughness={0.8} />
       </mesh>
 
-      {/* Door */}
+      {/* Chimney */}
+      <group position={[1.2, 3.6, -1.2]}>
+        <mesh position={[0, 0.6, 0]} castShadow>
+          <boxGeometry args={[0.4, 1.2, 0.4]} />
+          <meshStandardMaterial color="#6d5d5d" roughness={0.9} />
+        </mesh>
+        {/* Snow cap on chimney */}
+        <mesh position={[0, 1.25, 0]}>
+          <boxGeometry args={[0.5, 0.1, 0.5]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.95} />
+        </mesh>
+        {/* Smoke */}
+        <pointLight position={[0, 1.5, 0]} intensity={0.3} distance={2} color="#cccccc" />
+      </group>
+
+      {/* Door with frame */}
       <mesh position={[0, 0.5, 2.01]}>
-        <boxGeometry args={[0.8, 1.5, 0.1]} />
-        <meshStandardMaterial color="#4a3520" />
+        <boxGeometry args={[0.9, 1.6, 0.1]} />
+        <meshStandardMaterial color="#3a2818" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 0.5, 2.02]}>
+        <boxGeometry args={[0.8, 1.5, 0.08]} />
+        <meshStandardMaterial color="#4a3520" roughness={0.9} />
+      </mesh>
+      {/* Door handle */}
+      <mesh position={[0.3, 0.5, 2.06]}>
+        <sphereGeometry args={[0.05, 8, 8]} />
+        <meshStandardMaterial color="#daa520" metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Window with warm glow */}
-      <mesh position={[1, 1.5, 2.01]}>
-        <boxGeometry args={[0.6, 0.6, 0.1]} />
-        <meshStandardMaterial color="#ffd700" emissive="#ffaa00" emissiveIntensity={0.5} />
+      {/* Left window with frame and warm glow */}
+      <mesh position={[-1.2, 1.5, 2.01]}>
+        <boxGeometry args={[0.7, 0.7, 0.1]} />
+        <meshStandardMaterial color="#3a2818" roughness={0.8} />
       </mesh>
-      {/* Window light */}
-      <pointLight position={[1, 1.5, 2.5]} intensity={0.5} distance={4} color="#ffaa00" />
+      <mesh position={[-1.2, 1.5, 2.02]}>
+        <boxGeometry args={[0.6, 0.6, 0.08]} />
+        <meshStandardMaterial color="#ffd700" emissive="#ffaa00" emissiveIntensity={0.6} />
+      </mesh>
+      {/* Window cross bars */}
+      <mesh position={[-1.2, 1.5, 2.03]}>
+        <boxGeometry args={[0.6, 0.02, 0.05]} />
+        <meshStandardMaterial color="#3a2818" />
+      </mesh>
+      <mesh position={[-1.2, 1.5, 2.03]}>
+        <boxGeometry args={[0.02, 0.6, 0.05]} />
+        <meshStandardMaterial color="#3a2818" />
+      </mesh>
+      <pointLight position={[-1.2, 1.5, 2.5]} intensity={0.5} distance={4} color="#ffaa00" />
 
-      {/* Icicles hanging from roof edge - FIXED: pointing down from roof bottom */}
-      {Array.from({ length: 12 }, (_, i) => {
-        const angle = (i / 12) * Math.PI * 2;
-        const radius = 2.1;
-        const length = 0.4 + Math.random() * 0.4;
+      {/* Right window with frame and warm glow */}
+      <mesh position={[1.2, 1.5, 2.01]}>
+        <boxGeometry args={[0.7, 0.7, 0.1]} />
+        <meshStandardMaterial color="#3a2818" roughness={0.8} />
+      </mesh>
+      <mesh position={[1.2, 1.5, 2.02]}>
+        <boxGeometry args={[0.6, 0.6, 0.08]} />
+        <meshStandardMaterial color="#ffd700" emissive="#ffaa00" emissiveIntensity={0.6} />
+      </mesh>
+      {/* Window cross bars */}
+      <mesh position={[1.2, 1.5, 2.03]}>
+        <boxGeometry args={[0.6, 0.02, 0.05]} />
+        <meshStandardMaterial color="#3a2818" />
+      </mesh>
+      <mesh position={[1.2, 1.5, 2.03]}>
+        <boxGeometry args={[0.02, 0.6, 0.05]} />
+        <meshStandardMaterial color="#3a2818" />
+      </mesh>
+      <pointLight position={[1.2, 1.5, 2.5]} intensity={0.5} distance={4} color="#ffaa00" />
+
+      {/* Snow bank at base of cottage */}
+      <mesh position={[0, -0.2, 2.3]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[2.5, 16]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.95} />
+      </mesh>
+
+      {/* Icicles hanging from roof edge */}
+      {iciclePositions.map((data, i) => {
+        const radius = 2.2;
         return (
           <mesh
             key={i}
             position={[
-              Math.cos(angle) * radius,
-              3.0, // Aligned with roof bottom
-              Math.sin(angle) * radius
+              Math.cos(data.angle) * radius,
+              2.5,
+              Math.sin(data.angle) * radius
             ]}
-            rotation={[Math.PI, 0, 0]} // Flipped to point down
+            rotation={[Math.PI, 0, 0]}
           >
-            <coneGeometry args={[0.08, length, 8]} />
+            <coneGeometry args={[0.08, data.length, 8]} />
             <meshStandardMaterial
               color="#b8dcff"
               transparent
@@ -113,42 +299,64 @@ function Outpost() {
   );
 }
 
-// Snow ground
+// Snow ground with subtle perlin noise texture
 function SnowGround() {
-  // Generate fixed random positions for snow mounds (useMemo ensures they don't change)
-  const snowMounds = useMemo(() => {
-    return Array.from({ length: 30 }, () => ({
-      x: (Math.random() - 0.5) * 30,
-      z: (Math.random() - 0.5) * 30,
-      rotation: Math.random() * Math.PI,
-      size: 0.5 + Math.random()
-    }));
+  // Create terrain with subtle perlin-like noise
+  const terrainGeometry = useMemo(() => {
+    const geometry = new THREE.PlaneGeometry(100, 100, 150, 150);
+    const positions = geometry.attributes.position.array;
+
+    // Subtle pseudo-perlin noise function
+    const noise = (x, y) => {
+      let value = 0;
+      let amplitude = 1.3;
+      let frequency = 0.5; // Higher frequency for finer detail
+
+      // Multiple octaves for natural-looking terrain
+      for (let i = 0; i < 4; i++) {
+        const nx = x * frequency;
+        const ny = y * frequency;
+
+        // Mix of sin/cos for varied terrain
+        value += amplitude * (
+          Math.sin(nx) * Math.cos(ny) +
+          Math.sin(nx * 0.7 + 3.13) * Math.cos(ny * 1.3 + 1.58) +
+          Math.sin(nx * 1.8 + 2.1) * Math.sin(ny * 0.9 + 0.5)
+        ) / 3;
+
+        amplitude *= 0.5;
+        frequency *= 2.1;
+      }
+      return value;
+    };
+
+    // Apply noise to terrain vertices with low amplitude
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1];
+
+      // Z is height - very subtle undulation for texture only
+      positions[i + 2] = noise(x, y) * 0.15; // Very low amplitude (was 3.5 in menu)
+    }
+
+    geometry.computeVertexNormals();
+    return geometry;
   }, []);
 
   return (
-    <>
-      {/* Main ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -5, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial
-          color="#e8f4ff"
-          roughness={0.9}
-          metalness={0.05}
-        />
-      </mesh>
-
-      {/* Snow mounds for texture - fixed positions */}
-      {snowMounds.map((mound, i) => (
-        <mesh
-          key={i}
-          position={[mound.x, -4.95, mound.z]}
-          rotation={[-Math.PI / 2, 0, mound.rotation]}
-        >
-          <circleGeometry args={[mound.size, 8]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.95} />
-        </mesh>
-      ))}
-    </>
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, -5, 0]}
+      receiveShadow
+      geometry={terrainGeometry}
+    >
+      <meshStandardMaterial
+        color="#e8f4ff"
+        roughness={0.95}
+        metalness={0}
+        flatShading={false}
+      />
+    </mesh>
   );
 }
 
@@ -172,17 +380,17 @@ function Footprints({ hovered, onClick, onHover, onUnhover, collected }) {
         <group key={i}>
           {/* Footprint mesh - clickable and interactive */}
           <mesh
-            position={[pos[0], -4.96, pos[1]]}
+            position={[pos[0], -4.86, pos[1]]}
             rotation={[-Math.PI / 2, 0, i % 2 ? 0.2 : -0.2]}
-            onClick={onClick}
-            onPointerOver={onHover}
-            onPointerOut={onUnhover}
+            onClick={collected ? undefined : onClick}
+            onPointerOver={collected ? undefined : onHover}
+            onPointerOut={collected ? undefined : onUnhover}
           >
             <circleGeometry args={[0.15, 16]} />
             <meshStandardMaterial
-              color={collected ? '#999999' : '#c8d8e8'}
-              emissive={collected ? '#000000' : (hovered ? '#aaaaff' : '#4488ff')}
-              emissiveIntensity={collected ? 0 : (hovered ? 1.2 : 0.15)}
+              color={collected ? '#999999' : '#c8d8bc'}
+              emissive={collected ? '#000000' : (hovered ? '#aaaabb' : '#448899')}
+              emissiveIntensity={collected ? 0 : (hovered ? 1.2 : 0.01)}
               transparent
               opacity={collected ? 0.3 : 1}
             />
@@ -203,6 +411,43 @@ function Footprints({ hovered, onClick, onHover, onUnhover, collected }) {
   );
 }
 
+// Particle fire effect
+function ParticleFire({ position }) {
+  const meshRef = useRef();
+  const { camera, size } = useThree();
+
+  // Create fire geometry and material
+  const [geometry, material] = useMemo(() => {
+    const fireRadius = 0.2;
+    const fireHeight = 0.8;
+    const particleCount = 400;
+
+    const geo = new particleFire.Geometry(fireRadius, fireHeight, particleCount);
+    const mat = new particleFire.Material({ color: 0xff4400 });
+    mat.setPerspective(camera.fov, size.height);
+
+    return [geo, mat];
+  }, [camera.fov, size.height]);
+
+  // Update material each frame
+  useFrame((state, delta) => {
+    if (material) {
+      material.update(delta);
+    }
+  });
+
+  // Update perspective on resize
+  useEffect(() => {
+    if (material) {
+      material.setPerspective(camera.fov, size.height);
+    }
+  }, [camera.fov, size.height, material]);
+
+  return (
+    <points ref={meshRef} position={position} geometry={geometry} material={material} />
+  );
+}
+
 // Campfire
 function Campfire({ position }) {
   return (
@@ -210,7 +455,7 @@ function Campfire({ position }) {
       {/* Fire pit stones */}
       {Array.from({ length: 8 }, (_, i) => {
         const angle = (i / 8) * Math.PI * 2;
-        const radius = 0.3;
+        const radius = 0.2;
         return (
           <mesh
             key={i}
@@ -222,17 +467,20 @@ function Campfire({ position }) {
         );
       })}
 
+      {/* Particle fire effect */}
+      <ParticleFire position={[0, -4.6, 0]} />
+
       {/* Fire glow */}
       <pointLight
         position={[0, -4.7, 0]}
-        intensity={1}
-        distance={4}
+        intensity={1.2}
+        distance={5}
         color="#ff6600"
       />
 
       {/* Embers */}
       <mesh position={[0, -4.8, 0]}>
-        <sphereGeometry args={[0.15, 8, 8]} />
+        {/* <sphereGeometry args={[0.1, 8, 8]} /> */}
         <meshStandardMaterial
           color="#ff3300"
           emissive="#ff6600"
@@ -253,19 +501,33 @@ function Tree({ position, hasFabric = false }) {
         <meshStandardMaterial color="#3d2817" roughness={0.9} />
       </mesh>
 
-      {/* Pine foliage */}
+      {/* Pine foliage - lower section */}
       <mesh position={[0, 2.5, 0]}>
         <coneGeometry args={[0.8, 2, 8]} />
         <meshStandardMaterial color="#1a4d2e" roughness={0.8} />
       </mesh>
+
+      {/* Snow on lower branches */}
+      <mesh position={[0, 2.5, 0]}>
+        <coneGeometry args={[0.85, 0.2, 8]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.95} />
+      </mesh>
+
+      {/* Pine foliage - upper section */}
       <mesh position={[0, 3.3, 0]}>
         <coneGeometry args={[0.6, 1.5, 8]} />
         <meshStandardMaterial color="#1a5d3e" roughness={0.8} />
       </mesh>
 
-      {/* Snow on branches */}
-      <mesh position={[0, 3.5, 0]}>
+      {/* Snow on upper branches */}
+      <mesh position={[0, 3.3, 0]}>
         <coneGeometry args={[0.65, 0.2, 8]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.95} />
+      </mesh>
+
+      {/* Snow on top */}
+      <mesh position={[0, 4.0, 0]}>
+        <coneGeometry args={[0.45, 0.15, 8]} />
         <meshStandardMaterial color="#ffffff" roughness={0.95} />
       </mesh>
 
@@ -378,30 +640,21 @@ export default function Level1Scene3D({ clues, onClueClick }) {
             fov={75}
           />
 
-          {/* Lighting - night scene */}
-          <ambientLight intensity={0.15} color="#6688bb" />
+          {/* Lighting - night scene (reduced for darker atmosphere) */}
+          <ambientLight intensity={0.002} color="#4a5f7f" />
           <directionalLight
             position={[8, 8, 5]}
-            intensity={0.3}
-            color="#e8f4ff"
+            intensity={0.0001}
+            color="#d8e8ff"
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
           />
+          {/* Subtle fill light */}
+          <hemisphereLight skyColor="#1a2f4f" groundColor="#0a1020" intensity={0.001} />
 
-          {/* Dark night sky background */}
-          <color attach="background" args={['#0a0e1a']} />
-
-          {/* Stars */}
-          <Stars
-            radius={100}
-            depth={50}
-            count={3000}
-            factor={5}
-            saturation={0}
-            fade
-            speed={0.3}
-          />
+          {/* Night sky background texture */}
+          <NightSkyBackground />
 
           {/* Moon */}
           <Moon />
@@ -413,7 +666,7 @@ export default function Level1Scene3D({ clues, onClueClick }) {
           <SnowGround />
           <Outpost />
           <ForestEdge />
-          <Campfire position={[-2, 0, 2]} />
+          <Campfire position={[-1.5, 0, 1.5]} />
 
           {/* Interactive footprints - entire path is clickable */}
           {footprintsClue && (
@@ -432,7 +685,7 @@ export default function Level1Scene3D({ clues, onClueClick }) {
           {/* Interactive clues using 3D objects */}
           {fabricClue && (
             <PurpleFabricClue
-              position={[-2.6, -3.3, -2.5]} // Front of tree, visible to player
+              position={[-2.5, -3.5, -2.6]} // Front of tree, visible to player
               collected={fabricClue.collected}
               hovered={hoveredClue === 'fabric'}
               onHover={() => handleHover('fabric')}
@@ -446,7 +699,7 @@ export default function Level1Scene3D({ clues, onClueClick }) {
 
           {headphoneClue && (
             <HeadphoneJackClue
-              position={[-0.7, -4.85, 0.5]} // Between campfire and footprints
+              position={[-0.7, -4.98, 0.5]} // Between campfire and footprints
               collected={headphoneClue.collected}
               hovered={hoveredClue === 'headphone'}
               onHover={() => handleHover('headphone')}

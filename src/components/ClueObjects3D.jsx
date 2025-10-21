@@ -27,9 +27,9 @@ export function PurpleFabricClue({ position, collected, hovered, onHover, onUnho
       {/* Fabric piece - torn and hanging */}
       <mesh
         ref={meshRef}
-        onClick={onClick}
-        onPointerOver={onHover}
-        onPointerOut={onUnhover}
+        onClick={collected ? undefined : onClick}
+        onPointerOver={collected ? undefined : onHover}
+        onPointerOut={collected ? undefined : onUnhover}
         rotation={[0, 0, 0.2]}
       >
         <planeGeometry args={[0.3, 0.4]} />
@@ -70,16 +70,16 @@ export function HeadphoneJackClue({ position, collected, hovered, onHover, onUnh
     <group position={position}>
       {/* Headphone jack - just the connector piece */}
       <mesh
-        onClick={onClick}
-        onPointerOver={onHover}
-        onPointerOut={onUnhover}
+        onClick={collected ? undefined : onClick}
+        onPointerOver={collected ? undefined : onHover}
+        onPointerOut={collected ? undefined : onUnhover}
         rotation={[0, 0, Math.PI / 2]}
       >
         <cylinderGeometry args={[0.04, 0.04, 0.2, 8]} />
         <meshStandardMaterial
           color={collected ? '#666666' : '#111111'}
-          emissive={collected ? '#000000' : '#444444'}
-          emissiveIntensity={collected ? 0 : (hovered ? 0.5 : 0.1)}
+          emissive={collected ? '#000000' : '#666666'}
+          emissiveIntensity={collected ? 0 : (hovered ? 1.5 : 0.1)}
           metalness={0.9}
           roughness={0.2}
           transparent
@@ -114,15 +114,15 @@ export function FootprintsClue({ position, collected, hovered, onHover, onUnhove
     <group position={position}>
       {/* Invisible clickable area */}
       <mesh
-        onClick={onClick}
-        onPointerOver={onHover}
-        onPointerOut={onUnhover}
+        onClick={collected ? undefined : onClick}
+        onPointerOver={collected ? undefined : onHover}
+        onPointerOut={collected ? undefined : onUnhover}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <circleGeometry args={[0.5, 16]} />
         <meshStandardMaterial
           transparent
-          opacity={0}
+          opacity={0.1}
         />
       </mesh>
 
