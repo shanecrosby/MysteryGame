@@ -1,13 +1,15 @@
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stars, Text3D, Center, Environment } from '@react-three/drei';
-import { Suspense, useRef, useMemo } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, Stars, Text3D, Center, Environment, useGLTF } from '@react-three/drei';
+import { Suspense, useRef, useMemo, useState, useEffect } from 'react';
+import LoadingProgress from './LoadingProgress';
+import DevControls from './DevControls';
 import * as THREE from 'three';
 
 // Night sky background - compensating for horizontal stretching
 function NightSkyBackground() {
   const skyTexture = useMemo(() => {
     const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load('/src/images/nightsky.jpg');
+    const texture = textureLoader.load('/images/nightsky.jpg');
     // Set wrapping and repeat to compensate for stretching
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -35,6 +37,12 @@ function NightSkyBackground() {
 function Snowflakes() {
   const count = 300;
   const pointsRef = useRef();
+
+  // Load snowflake texture
+  const snowflakeTexture = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    return textureLoader.load('/images/snowflake.png');
+  }, []);
 
   // Generate initial positions and velocities
   const particleData = useMemo(() => {
@@ -101,11 +109,14 @@ function Snowflakes() {
         />
       </bufferGeometry>
       <pointsMaterial
-        size={0.12}
+        size={0.15}
         color="#ffffff"
+        map={snowflakeTexture}
         transparent
         opacity={0.8}
         sizeAttenuation
+        alphaTest={0.1}
+        depthWrite={false}
       />
     </points>
   );
@@ -122,6 +133,8 @@ function Icicle({ position, length = 1, rotation = 0, tiltAngle = 0 }) {
         opacity={0.3}
         roughness={0.1}
         metalness={0.3}
+        emissive="#6699ff"
+        emissiveIntensity={0.5}
       />
     </mesh>
   );
@@ -130,14 +143,14 @@ function Icicle({ position, length = 1, rotation = 0, tiltAngle = 0 }) {
 // Icicle array along the top
 function IcicleArray() {
   const icicles = useMemo(() => {
-    const count = 25;
+    const count = 45;
     const icicleData = [];
 
     for (let i = 0; i < count; i++) {
       const x = (i - count / 2) * 1.5;
-      const length = 1.0 + Math.random() * 2.5; // Increased size with random offset
+      const length = 1.0 + Math.random() * 5.5; // Increased size with random offset
       const z = -8;
-      const tiltAngle = (Math.random() - 0.7) * (10 * Math.PI / 180); // Random angle between -5 and +5 degrees
+      const tiltAngle = (Math.random() - 0.8) * (10 * Math.PI / 180); // Random angle between -5 and +5 degrees
 
       icicleData.push({
         key: i,
@@ -231,21 +244,15 @@ function Moon() {
   const [moonTexture, displacementMap] = useMemo(() => {
     const textureLoader = new THREE.TextureLoader();
 
-    // Load NASA moon texture
-    const texture = textureLoader.load(
-      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg"
-    );
-
-    // Load displacement map
-    const displacement = textureLoader.load(
-      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg"
-    );
+    // Load moon textures from local files (much faster than web)
+    const texture = textureLoader.load('/images/lroc_color_poles_1k.jpg');
+    const displacement = textureLoader.load('/images/ldem_3_8bit.jpg');
 
     return [texture, displacement];
   }, []);
 
   return (
-    <group position={[10, 5, -15]}>
+    <group position={[10, 9, -15]}>
       <mesh>
         <sphereGeometry args={[1.5, 64, 64]} />
         <meshStandardMaterial
@@ -272,97 +279,247 @@ function Moon() {
   );
 }
 
-// Tree component for menu scene
+// Tree component for menu scene - using TreeSet2/PineTree.glb
 function Tree({ position, scale = 1 }) {
+  const { scene } = useGLTF('/models/TreeSet2/PineTree.glb');
+
+  // Load tree textures
+  const [barkTexture, leavesTexture] = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    const bark = textureLoader.load('/models/TreeSet2/Textures/BarkDecidious0194_7_S.jpg');
+    const leaves = textureLoader.load('/models/TreeSet2/Textures/Leaves0142_4_S.png');
+
+    // Set proper encoding
+    bark.encoding = THREE.sRGBEncoding;
+    leaves.encoding = THREE.sRGBEncoding;
+
+    return [bark, leaves];
+  }, []);
+
+  // Clone the tree model
+  const treeModel = useMemo(() => {
+    const clone = scene.clone();
+
+    // Ensure materials are properly set up and shadows enabled
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (child.material) {
+          child.material = child.material.clone();
+
+          // Apply textures based on material properties
+          const matName = child.material.name?.toLowerCase() || '';
+
+          if (matName.includes('bark') || matName.includes('trunk') || matName.includes('wood')) {
+            child.material.map = barkTexture;
+            child.material.roughness = 0.9;
+            child.material.metalness = 0;
+          } else if (matName.includes('leaf') || matName.includes('leaves') || matName.includes('needle')) {
+            child.material.map = leavesTexture;
+            child.material.transparent = true;
+            child.material.alphaTest = 0.5;
+            child.material.side = THREE.DoubleSide;
+            child.material.roughness = 0.8;
+            child.material.metalness = 0;
+          }
+
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+
+    return clone;
+  }, [scene, position, barkTexture, leavesTexture]);
+
   return (
-    <group position={position} scale={scale}>
-      {/* Trunk */}
-      <mesh position={[0, 0.8, 0]} castShadow>
-        <cylinderGeometry args={[0.15, 0.2, 1.6, 8]} />
-        <meshStandardMaterial color="#3d2817" roughness={0.9} />
-      </mesh>
-
-      {/* Pine foliage - lower section */}
-      <mesh position={[0, 1.8, 0]} castShadow receiveShadow>
-        <coneGeometry args={[0.6, 1.5, 8]} />
-        <meshStandardMaterial color="#1a4d2e" roughness={0.8} />
-      </mesh>
-
-      {/* Snow on lower branches */}
-      <mesh position={[0, 1.8, 0]}>
-        <coneGeometry args={[0.5, 0.8, 32]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
-
-      {/* Pine foliage - upper section */}
-      <mesh position={[0, 2.5, 0]} castShadow receiveShadow>
-        <coneGeometry args={[0.45, 1.2, 8]} />
-        <meshStandardMaterial color="#1a5d3e" roughness={0.8} />
-      </mesh>
-
-      {/* Snow on upper branches */}
-      <mesh position={[0, 2.5, 0]}>
-        <coneGeometry args={[0.4, 0.6, 32]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
-
-      {/* Snow on top */}
-      {/* Radius, Height, RadialSegments */}
-      <mesh position={[0, 3, 0]}>
-        <coneGeometry args={[0.15, 0.5, 32]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
+    <group position={position}>
+      <primitive
+        object={treeModel}
+        scale={scale * 0.8}
+      />
     </group>
   );
 }
 
-// Forest of trees
+// Preload the tree model
+useGLTF.preload('/models/TreeSet2/PineTree.glb');
+
+// Floating forest spirit lights
+function ForestSprites() {
+  const sprites = useRef([]);
+  const spriteLights = useRef([]);
+
+  // Initialize sprite paths
+  const spritePaths = useMemo(() => {
+    return Array.from({ length: 5 }, (_, i) => ({
+      baseX: (i - 2) * 8, // Spread across the forest
+      baseZ: -10 - Math.random() * 10,
+      radius: 3 + Math.random() * 2,
+      speed: 0.3 + Math.random() * 0.3,
+      heightOffset: 0 + Math.random() * 2,
+      phase: Math.random() * Math.PI * 2
+    }));
+  }, []);
+
+  // Animate sprites
+  useFrame((state) => {
+    const time = state.clock.elapsedTime;
+
+    spritePaths.forEach((path, i) => {
+      if (spriteLights.current[i]) {
+        // Weaving motion in a figure-8 pattern
+        const angle = time * path.speed + path.phase;
+        const x = path.baseX + Math.sin(angle) * path.radius;
+        const y = -2 + path.heightOffset + Math.sin(angle * 2) * 1.5;
+        const z = path.baseZ + Math.cos(angle) * path.radius;
+
+        spriteLights.current[i].position.set(x, y, z);
+
+        // Gentle pulsing
+        const pulse = 0.3 + Math.sin(time * 2 + path.phase) * 0.2;
+        spriteLights.current[i].intensity = pulse;
+      }
+    });
+  });
+
+  return (
+    <group>
+      {spritePaths.map((path, i) => (
+        <pointLight
+          key={i}
+          ref={(el) => (spriteLights.current[i] = el)}
+          color="#88aaff"
+          intensity={0.3}
+          distance={6}
+          castShadow
+          shadow-mapSize-width={512}
+          shadow-mapSize-height={512}
+        />
+      ))}
+    </group>
+  );
+}
+
+// Forest of trees - clustered left and right with winding path down center
 function Forest() {
   const trees = useMemo(() => {
     const treePositions = [];
 
-    // Back row - distant forest
-    for (let i = -10; i <= 10; i++) {
+    // Helper function to get terrain height at position (simplified version)
+    const getTerrainHeight = (x, z) => {
+      // Simplified terrain height calculation matching SnowGround
+      const noise = (x, z) => {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 0.05;
+
+        for (let i = 0; i < 5; i++) {
+          const nx = x * frequency;
+          const nz = z * frequency;
+          value += amplitude * (
+            Math.sin(nx) * Math.cos(nz) +
+            Math.sin(nx * 0.7 + 3.14) * Math.cos(nz * 1.3 + 1.57) +
+            Math.sin(nx * 1.8 + 2.1) * Math.sin(nz * 0.9 + 0.5)
+          ) / 3;
+          amplitude *= 0.4;
+          frequency *= 2.1;
+        }
+        return value;
+      };
+      return -5 + noise(x, z) * 3.5;
+    };
+
+    // Create winding path down center by defining path curve
+    const pathWidth = 6; // Width of the clear path
+
+    // Far back - both sides
+    for (let i = 0; i < 15; i++) {
+      const z = -25 + (Math.random() - 0.5) * 4;
+      const pathOffset = Math.sin(z * 0.3) * 2; // Winding effect
+
+      // Left cluster
+      const xLeft = -8 - Math.random() * 8 + pathOffset;
       treePositions.push({
-        pos: [i * 3 + (Math.random() - 0.5) * 2, -5, -25 + (Math.random() - 0.5) * 3],
-        scale: 0.8 + Math.random() * 0.4
+        pos: [xLeft, getTerrainHeight(xLeft, z), z],
+        scale: 0.7 + Math.random() * 0.4
+      });
+
+      // Right cluster
+      const xRight = 8 + Math.random() * 8 + pathOffset;
+      treePositions.push({
+        pos: [xRight, getTerrainHeight(xRight, z), z],
+        scale: 0.7 + Math.random() * 0.4
       });
     }
 
-    // Middle-back row
-    for (let i = -8; i <= 8; i++) {
+    // Middle-back - denser clusters
+    for (let i = 0; i < 12; i++) {
+      const z = -18 + (Math.random() - 0.5) * 4;
+      const pathOffset = Math.sin(z * 0.3) * 2.5;
+
+      // Left cluster
+      const xLeft = -6 - Math.random() * 6 + pathOffset;
       treePositions.push({
-        pos: [i * 3.5 + (Math.random() - 0.5) * 2, -5, -18 + (Math.random() - 0.5) * 2],
-        scale: 0.9 + Math.random() * 0.5
+        pos: [xLeft, getTerrainHeight(xLeft, z), z],
+        scale: 0.8 + Math.random() * 0.5
+      });
+
+      // Right cluster
+      const xRight = 6 + Math.random() * 6 + pathOffset;
+      treePositions.push({
+        pos: [xRight, getTerrainHeight(xRight, z), z],
+        scale: 0.8 + Math.random() * 0.5
       });
     }
 
-    // Middle row - sides only for clearing
-    for (let i = -6; i <= -4; i++) {
-      treePositions.push({
-        pos: [i * 3.5 + (Math.random() - 0.5) * 1.5, -5, -12 + (Math.random() - 0.5) * 2],
-        scale: 1.0 + Math.random() * 0.5
-      });
-    }
-    for (let i = 4; i <= 6; i++) {
-      treePositions.push({
-        pos: [i * 3.5 + (Math.random() - 0.5) * 1.5, -5, -12 + (Math.random() - 0.5) * 2],
-        scale: 1.0 + Math.random() * 0.5
-      });
+    // Middle - sides of winding path
+    for (let i = 0; i < 10; i++) {
+      const z = -12 + (Math.random() - 0.5) * 3;
+      const pathOffset = Math.sin(z * 0.3) * 3;
+
+      // Left cluster
+      const xLeft = -5 - Math.random() * 4 + pathOffset;
+      if (Math.abs(xLeft - pathOffset) > pathWidth / 2) {
+        treePositions.push({
+          pos: [xLeft, getTerrainHeight(xLeft, z), z],
+          scale: 0.9 + Math.random() * 0.5
+        });
+      }
+
+      // Right cluster
+      const xRight = 5 + Math.random() * 4 + pathOffset;
+      if (Math.abs(xRight - pathOffset) > pathWidth / 2) {
+        treePositions.push({
+          pos: [xRight, getTerrainHeight(xRight, z), z],
+          scale: 0.9 + Math.random() * 0.5
+        });
+      }
     }
 
-    // Front edges
-    for (let i = -5; i <= -3; i++) {
-      treePositions.push({
-        pos: [i * 4 + (Math.random() - 0.5) * 2, -5, -6 + (Math.random() - 0.5) * 2],
-        scale: 1.1 + Math.random() * 0.6
-      });
-    }
-    for (let i = 3; i <= 5; i++) {
-      treePositions.push({
-        pos: [i * 4 + (Math.random() - 0.5) * 2, -5, -6 + (Math.random() - 0.5) * 2],
-        scale: 1.1 + Math.random() * 0.6
-      });
+    // Front edges - larger trees framing the path
+    for (let i = 0; i < 6; i++) {
+      const z = -6 + (Math.random() - 0.5) * 2;
+      const pathOffset = Math.sin(z * 0.3) * 3.5;
+
+      // Left cluster
+      const xLeft = -6 - Math.random() * 3 + pathOffset;
+      if (Math.abs(xLeft - pathOffset) > pathWidth / 2) {
+        treePositions.push({
+          pos: [xLeft, getTerrainHeight(xLeft, z), z],
+          scale: 1.0 + Math.random() * 0.6
+        });
+      }
+
+      // Right cluster
+      const xRight = 6 + Math.random() * 3 + pathOffset;
+      if (Math.abs(xRight - pathOffset) > pathWidth / 2) {
+        treePositions.push({
+          pos: [xRight, getTerrainHeight(xRight, z), z],
+          scale: 1.0 + Math.random() * 0.6
+        });
+      }
     }
 
     return treePositions;
@@ -377,17 +534,70 @@ function Forest() {
   );
 }
 
+// Camera tracker component - updates state with camera position
+function CameraTracker({ onUpdate, fov }) {
+  const { camera } = useThree();
+
+  useFrame(() => {
+    onUpdate({
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
+      fov: camera.fov
+    });
+  });
+
+  // Update camera FOV when changed
+  useEffect(() => {
+    if (camera && fov !== camera.fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, fov]);
+
+  return null;
+}
+
 // Main scene component
 export default function MenuScene3D() {
+  const [devMode] = useState(true); // Set to false in production
+  const [cameraInfo, setCameraInfo] = useState({
+    position: [0, 2, 10],
+    rotation: [0, 0, 0],
+    fov: 60
+  });
+  const [fov, setFov] = useState(60);
+
+  // Update camera FOV
+  const handleFovChange = (newFov) => {
+    setFov(newFov);
+  };
+
   return (
     <div className="absolute inset-0">
+      {/* Loading Progress Indicator */}
+      <LoadingProgress />
+
+      {/* Dev Controls Panel */}
+      {devMode && (
+        <DevControls
+          cameraPosition={cameraInfo.position}
+          cameraRotation={cameraInfo.rotation}
+          fov={fov}
+          onFovChange={handleFovChange}
+          objects={[]}
+        />
+      )}
+
       <Canvas
         shadows
-        camera={{ position: [0, 2, 10], fov: 60 }}
+        camera={{ position: [0, 2, 10], fov: fov }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
         <Suspense fallback={null}>
+          {/* Camera tracking for dev mode */}
+          {devMode && <CameraTracker onUpdate={setCameraInfo} fov={fov} />}
+
           {/* Lighting - moonlit scene (reduced to 25% brightness) */}
           <ambientLight intensity={0.025} color="#2a3f5f" />
 
@@ -411,30 +621,22 @@ export default function MenuScene3D() {
           {/* Subtle fill light */}
           <hemisphereLight skyColor="#1a2fff" groundColor="#0a10ff" intensity={0.01} />
 
+          <Moon />
+
           {/* Night sky background */}
           <NightSkyBackground />
 
-          {/* Sky elements */}
-          <Stars
-            radius={100}
-            depth={50}
-            count={1000}
-            factor={4}
-            saturation={0}
-            fade
-            speed={0.5}
-          />
-
-          <Moon />
           <Snowflakes />
 
           {/* Scene elements */}
           <Forest />
+          <ForestSprites />
           <IcicleArray />
           <SnowGround />
 
-          {/* Optional: subtle rotation control (disabled for fixed camera) */}
-          {/* <OrbitControls enableZoom={false} enablePan={false} /> */}
+          {/* Dev mode orbit controls */}
+          {devMode && <OrbitControls makeDefault />}
+
         </Suspense>
       </Canvas>
     </div>

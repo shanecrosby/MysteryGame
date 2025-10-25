@@ -1,7 +1,9 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { PerspectiveCamera } from '@react-three/drei';
+import { PerspectiveCamera, useGLTF, OrbitControls } from '@react-three/drei';
 import { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { PurpleFabricClue, HeadphoneJackClue } from './ClueObjects3D';
+import LoadingProgress from './LoadingProgress';
+import DevControls from './DevControls';
 import * as THREE from 'three';
 import particleFire from 'three-particle-fire';
 
@@ -12,21 +14,21 @@ particleFire.install({ THREE: THREE });
 function NightSkyBackground() {
   const skyTexture = useMemo(() => {
     const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load('/src/images/nightsky.jpg');
+    const texture = textureLoader.load('/images/nightsky.jpg');
     // Set wrapping and repeat to compensate for stretching
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     // Repeat the texture horizontally to reduce stretching
     texture.repeat.set(2.5, 1);
     // Offset to hide seam outside viewport (25% = 0.25, or ~90 degrees)
-    texture.offset.set(0.25, 0);
+    texture.offset.set(0.33, 0);
     return texture;
   }, []);
 
   return (
-    <mesh position={[0, 125, 0]}>
-      {/* Use a large cylinder for rectangular skybox image - shifted up 25% */}
-      <cylinderGeometry args={[500, 500, 500, 48, 1, true]} />
+    <mesh position={[0, 150, 0]}>
+      {/* Use a large cylinder for rectangular skybox image - positioned lower to hide top */}
+      <cylinderGeometry args={[500, 600, 500, 48, 1, true]} />
       <meshBasicMaterial
         map={skyTexture}
         side={THREE.BackSide}
@@ -40,6 +42,12 @@ function NightSkyBackground() {
 function Snowflakes() {
   const count = 300;
   const pointsRef = useRef();
+
+  // Load snowflake texture
+  const snowflakeTexture = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    return textureLoader.load('/images/snowflake.png');
+  }, []);
 
   // Generate initial positions and velocities
   const particleData = useMemo(() => {
@@ -106,11 +114,14 @@ function Snowflakes() {
         />
       </bufferGeometry>
       <pointsMaterial
-        size={0.12}
+        size={0.15}
         color="#ffffff"
+        map={snowflakeTexture}
         transparent
         opacity={0.8}
         sizeAttenuation
+        alphaTest={0.1}
+        depthWrite={false}
       />
     </points>
   );
@@ -121,21 +132,15 @@ function Moon() {
   const [moonTexture, displacementMap] = useMemo(() => {
     const textureLoader = new THREE.TextureLoader();
 
-    // Load NASA moon texture
-    const texture = textureLoader.load(
-      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg"
-    );
-
-    // Load displacement map
-    const displacement = textureLoader.load(
-      "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg"
-    );
+    // Load moon textures from local files (much faster than web)
+    const texture = textureLoader.load('/images/lroc_color_poles_1k.jpg');
+    const displacement = textureLoader.load('/images/ldem_3_8bit.jpg');
 
     return [texture, displacement];
   }, []);
 
   return (
-    <group position={[8, 6, -15]}>
+    <group position={[-8, 8, -12]}>
       <mesh>
         <sphereGeometry args={[1.2, 64, 64]} />
         <meshStandardMaterial
@@ -164,140 +169,77 @@ function Moon() {
   );
 }
 
-// Snowy Cottage - Enhanced building with more detail
-function Outpost() {
-  const iciclePositions = useMemo(() =>
-    Array.from({ length: 16 }, (_, i) => ({
-      angle: (i / 12) * Math.PI * 2,
-      length: 0.4 + Math.random() * 0.4
-    }))
-  , []);
+// Snowy Cottage - Using House_1.glb model (compressed)
+function Outpost({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
+  const { scene } = useGLTF('/models/house/House_1.glb');
+
+  // Load house textures (optimized WebP versions)
+  const [colorMap, normalMap, roughnessMap, color3Map, normal3Map, rough3Map] = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+
+    const color = textureLoader.load('/models/house/Atlas_Color.webp');
+    const normal = textureLoader.load('/models/house/Atlas_Norm.webp');
+    const rough = textureLoader.load('/models/house/Atlas_Rough.webp');
+    const color3 = textureLoader.load('/models/house/Atlas_3_Color.webp');
+    const normal3 = textureLoader.load('/models/house/Atlas_3_Norm.webp');
+    const rough3 = textureLoader.load('/models/house/Atlas_3_Rough.webp');
+
+    // Set proper encoding
+    color.encoding = THREE.sRGBEncoding;
+    color3.encoding = THREE.sRGBEncoding;
+
+    return [color, normal, rough, color3, normal3, rough3];
+  }, []);
+
+  // Clone house and apply textures
+  const houseModel = useMemo(() => {
+    const clone = scene.clone();
+
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (child.material) {
+          child.material = child.material.clone();
+
+          // Apply textures based on material name or index
+          if (child.material.name && child.material.name.includes('3')) {
+            child.material.map = color3Map;
+            child.material.normalMap = normal3Map;
+            child.material.roughnessMap = rough3Map;
+          } else {
+            child.material.map = colorMap;
+            child.material.normalMap = normalMap;
+            child.material.roughnessMap = roughnessMap;
+          }
+
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+
+    return clone;
+  }, [scene, colorMap, normalMap, roughnessMap, color3Map, normal3Map, rough3Map]);
 
   return (
-    <group position={[-6, -5, -8]}>
-      {/* Main building - wooden cottage */}
-      <mesh position={[0, 1.5, 0]} castShadow>
-        <boxGeometry args={[4, 3, 4]} />
-        <meshStandardMaterial color="#8b7355" roughness={0.9} />
-      </mesh>
+    <group position={position} rotation={rotation} scale={scale}>
+      {/* New House Model */}
+      <primitive
+        object={houseModel}
+        scale={2}
+        position={[0, 0, 0]}
+        rotation={[0, 0, 0]}
+      />
 
-      {/* Wood planks texture simulation */}
-      {Array.from({ length: 8 }, (_, i) => (
-        <mesh key={`plank-${i}`} position={[0, 0.2 + i * 0.4, 2.02]}>
-          <boxGeometry args={[4, 0.05, 0.01]} />
-          <meshStandardMaterial color="#6d5d47" roughness={0.95} />
-        </mesh>
-      ))}
-
-      {/* Roof - snow-covered with overhang */}
-      <mesh position={[0, 3.75, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[3.2, 1.8, 4]} />
-        <meshStandardMaterial color="#efeffe" roughness={0.8} />
-      </mesh>
-
-      {/* Chimney */}
-      <group position={[1.2, 3.6, -1.2]}>
-        <mesh position={[0, 0.6, 0]} castShadow>
-          <boxGeometry args={[0.4, 1.2, 0.4]} />
-          <meshStandardMaterial color="#6d5d5d" roughness={0.9} />
-        </mesh>
-        {/* Snow cap on chimney */}
-        <mesh position={[0, 1.25, 0]}>
-          <boxGeometry args={[0.5, 0.1, 0.5]} />
-          <meshStandardMaterial color="#ffffff" roughness={0.95} />
-        </mesh>
-        {/* Smoke */}
-        <pointLight position={[0, 1.5, 0]} intensity={0.3} distance={2} color="#cccccc" />
-      </group>
-
-      {/* Door with frame */}
-      <mesh position={[0, 0.5, 2.01]}>
-        <boxGeometry args={[0.9, 1.6, 0.1]} />
-        <meshStandardMaterial color="#3a2818" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 0.5, 2.02]}>
-        <boxGeometry args={[0.8, 1.5, 0.08]} />
-        <meshStandardMaterial color="#4a3520" roughness={0.9} />
-      </mesh>
-      {/* Door handle */}
-      <mesh position={[0.3, 0.5, 2.06]}>
-        <sphereGeometry args={[0.05, 8, 8]} />
-        <meshStandardMaterial color="#daa520" metalness={0.8} roughness={0.2} />
-      </mesh>
-
-      {/* Left window with frame and warm glow */}
-      <mesh position={[-1.2, 1.5, 2.01]}>
-        <boxGeometry args={[0.7, 0.7, 0.1]} />
-        <meshStandardMaterial color="#3a2818" roughness={0.8} />
-      </mesh>
-      <mesh position={[-1.2, 1.5, 2.02]}>
-        <boxGeometry args={[0.6, 0.6, 0.08]} />
-        <meshStandardMaterial color="#ffd700" emissive="#ffaa00" emissiveIntensity={0.6} />
-      </mesh>
-      {/* Window cross bars */}
-      <mesh position={[-1.2, 1.5, 2.03]}>
-        <boxGeometry args={[0.6, 0.02, 0.05]} />
-        <meshStandardMaterial color="#3a2818" />
-      </mesh>
-      <mesh position={[-1.2, 1.5, 2.03]}>
-        <boxGeometry args={[0.02, 0.6, 0.05]} />
-        <meshStandardMaterial color="#3a2818" />
-      </mesh>
-      <pointLight position={[-1.2, 1.5, 2.5]} intensity={0.5} distance={4} color="#ffaa00" />
-
-      {/* Right window with frame and warm glow */}
-      <mesh position={[1.2, 1.5, 2.01]}>
-        <boxGeometry args={[0.7, 0.7, 0.1]} />
-        <meshStandardMaterial color="#3a2818" roughness={0.8} />
-      </mesh>
-      <mesh position={[1.2, 1.5, 2.02]}>
-        <boxGeometry args={[0.6, 0.6, 0.08]} />
-        <meshStandardMaterial color="#ffd700" emissive="#ffaa00" emissiveIntensity={0.6} />
-      </mesh>
-      {/* Window cross bars */}
-      <mesh position={[1.2, 1.5, 2.03]}>
-        <boxGeometry args={[0.6, 0.02, 0.05]} />
-        <meshStandardMaterial color="#3a2818" />
-      </mesh>
-      <mesh position={[1.2, 1.5, 2.03]}>
-        <boxGeometry args={[0.02, 0.6, 0.05]} />
-        <meshStandardMaterial color="#3a2818" />
-      </mesh>
-      <pointLight position={[1.2, 1.5, 2.5]} intensity={0.5} distance={4} color="#ffaa00" />
-
-      {/* Snow bank at base of cottage */}
-      <mesh position={[0, -0.2, 2.3]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[2.5, 16]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
-
-      {/* Icicles hanging from roof edge */}
-      {iciclePositions.map((data, i) => {
-        const radius = 2.2;
-        return (
-          <mesh
-            key={i}
-            position={[
-              Math.cos(data.angle) * radius,
-              2.5,
-              Math.sin(data.angle) * radius
-            ]}
-            rotation={[Math.PI, 0, 0]}
-          >
-            <coneGeometry args={[0.08, data.length, 8]} />
-            <meshStandardMaterial
-              color="#b8dcff"
-              transparent
-              opacity={0.7}
-              roughness={0.1}
-              metalness={0.3}
-            />
-          </mesh>
-        );
-      })}
+      {/* Chimney smoke light */}
+      <pointLight position={[1.2, 5, -1.2]} intensity={0.3} distance={2} color="#cccccc" />
     </group>
   );
 }
+
+// Preload the house model
+useGLTF.preload('/models/house/House_1.glb');
 
 // Snow ground with subtle perlin noise texture
 function SnowGround() {
@@ -419,7 +361,7 @@ function ParticleFire({ position }) {
   // Create fire geometry and material
   const [geometry, material] = useMemo(() => {
     const fireRadius = 0.2;
-    const fireHeight = 0.8;
+    const fireHeight = 1.2;
     const particleCount = 400;
 
     const geo = new particleFire.Geometry(fireRadius, fireHeight, particleCount);
@@ -448,88 +390,268 @@ function ParticleFire({ position }) {
   );
 }
 
-// Campfire
-function Campfire({ position }) {
+// Campfire - using GLB model with fire effect
+function Campfire({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1, hovered, onClick, onHover, onUnhover }) {
+  const { scene } = useGLTF('/models/firepit/stone_fire_pit_4k.glb');
+
+  // Load textures manually (only diffuse for now, as EXR requires special loader)
+  const diffuseMap = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    const diffuse = textureLoader.load('/models/firepit/textures/stone_fire_pit_diff_4k.jpg');
+    diffuse.encoding = THREE.sRGBEncoding;
+    diffuse.flipY = false;
+    return diffuse;
+  }, []);
+
+  // Clone the scene and apply textures
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone();
+
+    // Apply textures and enable shadows
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        // Apply diffuse texture to the material
+        if (child.material) {
+          child.material = child.material.clone();
+
+          // Apply diffuse map
+          if (diffuseMap) {
+            child.material.map = diffuseMap;
+          }
+
+          // Set material properties for better appearance
+          child.material.roughness = 0.8;
+          child.material.metalness = 0.1;
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+
+    return clone;
+  }, [scene, diffuseMap]);
+
   return (
-    <group position={position}>
-      {/* Fire pit stones */}
-      {Array.from({ length: 8 }, (_, i) => {
-        const angle = (i / 8) * Math.PI * 2;
-        const radius = 0.2;
-        return (
-          <mesh
-            key={i}
-            position={[Math.cos(angle) * radius, -4.85, Math.sin(angle) * radius]}
-          >
-            <boxGeometry args={[0.15, 0.2, 0.15]} />
-            <meshStandardMaterial color="#555555" roughness={0.9} />
-          </mesh>
-        );
-      })}
+    <group position={position} rotation={rotation} scale={scale}>
+      {/* Stone fire pit model - positioned at the base */}
+      <primitive object={clonedScene} position={[0, -4.85, 0]} scale={0.5} />
 
-      {/* Particle fire effect */}
-      <ParticleFire position={[0, -4.6, 0]} />
+      {/* Particle fire effect - positioned to sit inside fire pit */}
+      <ParticleFire position={[0, -4.75, 0]} />
 
-      {/* Fire glow */}
+      {/* Fire glow - point light for ambient fire glow */}
       <pointLight
         position={[0, -4.7, 0]}
         intensity={1.2}
-        distance={5}
+        distance={7}
         color="#ff6600"
       />
 
-      {/* Embers */}
-      <mesh position={[0, -4.8, 0]}>
-        {/* <sphereGeometry args={[0.1, 8, 8]} /> */}
-        <meshStandardMaterial
-          color="#ff3300"
-          emissive="#ff6600"
-          emissiveIntensity={1}
-        />
-      </mesh>
+      {/* Spotlight for casting shadows from fire pit */}
+      <spotLight
+        position={[0, -3.5, 0]}
+        target-position={[0, -5, 0]}
+        angle={Math.PI / 3}
+        penumbra={0.5}
+        intensity={0.8}
+        distance={5}
+        color="#ff6600"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-near={0.5}
+        shadow-camera-far={5}
+        shadow-bias={-0.0001}
+      />
     </group>
   );
 }
 
-// Tree with purple fabric attached
-function Tree({ position, hasFabric = false }) {
+// Preload the fire pit model
+useGLTF.preload('/models/firepit/stone_fire_pit_4k.glb');
+
+// Firewood Stack - logs stacked beside the house
+function FirewoodStack({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
+  const { scene } = useGLTF('/models/log/log1_1.8k.glb');
+
+  // Load log textures
+  const [diffuseMap, normalMap, roughnessMap, aoMap] = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+
+    const diffuse = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_diffuse.webp');
+    const normal = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_normal.webp');
+    const rough = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_roughness.webp');
+    const ao = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_ao.webp');
+
+    diffuse.encoding = THREE.sRGBEncoding;
+
+    return [diffuse, normal, rough, ao];
+  }, []);
+
+  // Create multiple log instances for the stack
+  const logPositions = useMemo(() => [
+    // Bottom layer - 3 logs
+    { pos: [0, 0, 0], rot: [0, 0, 0] },
+    { pos: [0.15, 0, 0.3], rot: [0, 0.3, 0] },
+    { pos: [-0.15, 0, -0.3], rot: [0, -0.4, 0] },
+    // Middle layer - 2 logs
+    { pos: [0, 0.15, 0.15], rot: [0, 1.5, 0] },
+    { pos: [0, 0.15, -0.15], rot: [0, 1.8, 0] },
+    // Top layer - 2 logs
+    { pos: [0, 0.3, 0], rot: [0, 0.2, 0] },
+    { pos: [0.1, 0.3, 0.1], rot: [0, -0.5, 0] }
+  ], []);
+
+  return (
+    <group position={position} rotation={rotation}>
+      {logPositions.map((logData, i) => {
+        const logModel = useMemo(() => {
+          const clone = scene.clone();
+
+          clone.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+
+              if (child.material) {
+                child.material = child.material.clone();
+                child.material.map = diffuseMap;
+                child.material.normalMap = normalMap;
+                child.material.roughnessMap = roughnessMap;
+                child.material.aoMap = aoMap;
+                child.material.needsUpdate = true;
+              }
+            }
+          });
+
+          return clone;
+        }, [scene, diffuseMap, normalMap, roughnessMap, aoMap]);
+
+        return (
+          <primitive
+            key={i}
+            object={logModel}
+            position={logData.pos}
+            rotation={logData.rot}
+            scale={0.00005 * scale}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+// Preload the log model
+useGLTF.preload('/models/log/log1_1.8k.glb');
+
+// Creeper - hidden in the forest
+function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
+  const { scene } = useGLTF('/models/creeper/Creeper.glb');
+
+  // Load creeper texture
+  const texture = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    const tex = textureLoader.load('/models/creeper/creeper.png');
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }, []);
+
+  // Clone and configure creeper
+  const creeperModel = useMemo(() => {
+    const clone = scene.clone();
+
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (child.material) {
+          child.material = child.material.clone();
+          child.material.map = texture;
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+
+    return clone;
+  }, [scene, texture]);
+
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      <primitive
+        object={creeperModel}
+        scale={0.8}
+      />
+    </group>
+  );
+}
+
+// Preload the creeper model
+useGLTF.preload('/models/creeper/Creeper.glb');
+
+// Tree with purple fabric attached - using TreeSet2/PineTree.glb
+function Tree({ position, hasFabric = false, scale = 1 }) {
+  const { scene } = useGLTF('/models/TreeSet2/PineTree.glb');
+
+  // Load tree textures
+  const [barkTexture, leavesTexture] = useMemo(() => {
+    const textureLoader = new THREE.TextureLoader();
+    const bark = textureLoader.load('/models/TreeSet2/Textures/BarkDecidious0194_7_S.jpg');
+    const leaves = textureLoader.load('/models/TreeSet2/Textures/Leaves0142_4_S.png');
+
+    // Set proper encoding
+    bark.encoding = THREE.sRGBEncoding;
+    leaves.encoding = THREE.sRGBEncoding;
+
+    return [bark, leaves];
+  }, []);
+
+  // Clone the tree model
+  const treeModel = useMemo(() => {
+    const clone = scene.clone();
+
+    // Ensure materials are properly set up and shadows enabled
+    clone.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (child.material) {
+          child.material = child.material.clone();
+
+          // Apply textures based on material properties
+          const matName = child.material.name?.toLowerCase() || '';
+
+          if (matName.includes('bark') || matName.includes('trunk') || matName.includes('wood')) {
+            child.material.map = barkTexture;
+            child.material.roughness = 0.9;
+            child.material.metalness = 0;
+          } else if (matName.includes('leaf') || matName.includes('leaves') || matName.includes('needle')) {
+            child.material.map = leavesTexture;
+            child.material.transparent = true;
+            child.material.alphaTest = 0.5;
+            child.material.side = THREE.DoubleSide;
+            child.material.roughness = 0.8;
+            child.material.metalness = 0;
+          }
+
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+
+    return clone;
+  }, [scene, position, barkTexture, leavesTexture]);
+
   return (
     <group position={position}>
-      {/* Trunk */}
-      <mesh position={[0, 1, 0]}>
-        <cylinderGeometry args={[0.2, 0.25, 2, 8]} />
-        <meshStandardMaterial color="#3d2817" roughness={0.9} />
-      </mesh>
-
-      {/* Pine foliage - lower section */}
-      <mesh position={[0, 2.5, 0]}>
-        <coneGeometry args={[0.8, 2, 8]} />
-        <meshStandardMaterial color="#1a4d2e" roughness={0.8} />
-      </mesh>
-
-      {/* Snow on lower branches */}
-      <mesh position={[0, 2.5, 0]}>
-        <coneGeometry args={[0.85, 0.2, 8]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
-
-      {/* Pine foliage - upper section */}
-      <mesh position={[0, 3.3, 0]}>
-        <coneGeometry args={[0.6, 1.5, 8]} />
-        <meshStandardMaterial color="#1a5d3e" roughness={0.8} />
-      </mesh>
-
-      {/* Snow on upper branches */}
-      <mesh position={[0, 3.3, 0]}>
-        <coneGeometry args={[0.65, 0.2, 8]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
-
-      {/* Snow on top */}
-      <mesh position={[0, 4.0, 0]}>
-        <coneGeometry args={[0.45, 0.15, 8]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} />
-      </mesh>
+      <primitive
+        object={treeModel}
+        scale={0.65 * scale}
+        position={[0, 0, 0]}
+      />
 
       {/* Branch stub for fabric (if this tree has the fabric clue) */}
       {hasFabric && (
@@ -542,59 +664,55 @@ function Tree({ position, hasFabric = false }) {
   );
 }
 
-// Forest edge - creating a clearing effect
+// Preload the tree model
+useGLTF.preload('/models/TreeSet2/PineTree.glb');
+
+// Camera tracker component - updates state with camera position
+function CameraTracker({ onUpdate, fov }) {
+  const { camera } = useThree();
+
+  useFrame(() => {
+    onUpdate({
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z],
+      fov: camera.fov
+    });
+  });
+
+  // Update camera FOV when changed
+  useEffect(() => {
+    if (camera && fov !== undefined && fov !== camera.fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, fov]);
+
+  return null;
+}
+
+// Forest edge - creating atmosphere with 5 trees
+// Positioned to avoid house (-8.4, -4.9, -1.4) and campfire (-0.8, -0.1, 2.4)
+// One tree positioned near fabric clue (-8.4, -7.7, -2.4)
 function ForestEdge() {
   const treePositions = [
-    // Far back row - very distant
-    { pos: [-8, -5, -18], fabric: false },
-    { pos: [-6, -5, -17], fabric: false },
-    { pos: [-4, -5, -19], fabric: false },
-    { pos: [-10, -5, -16], fabric: false },
-    { pos: [-12, -5, -18], fabric: false },
-    { pos: [-2, -5, -17], fabric: false },
-    { pos: [0, -5, -18], fabric: false },
-    { pos: [2, -5, -19], fabric: false },
-    { pos: [4, -5, -17], fabric: false },
-    { pos: [6, -5, -16], fabric: false },
-    { pos: [8, -5, -18], fabric: false },
-    { pos: [10, -5, -17], fabric: false },
-    { pos: [12, -5, -19], fabric: false },
-
-    // Back row - distant
-    { pos: [-8, -5, -12], fabric: false },
-    { pos: [-6, -5, -14], fabric: false },
-    { pos: [-4, -5, -13], fabric: false },
-    { pos: [-10, -5, -15], fabric: false },
-    { pos: [-12, -5, -13], fabric: false },
-    { pos: [-14, -5, -14], fabric: false },
-    { pos: [4, -5, -13], fabric: false },
-    { pos: [6, -5, -15], fabric: false },
-    { pos: [8, -5, -14], fabric: false },
-    { pos: [2, -5, -16], fabric: false },
-    { pos: [10, -5, -12], fabric: false },
-    { pos: [12, -5, -15], fabric: false },
-    { pos: [14, -5, -13], fabric: false },
-
-    // Middle row - only on sides, creating clearing
-    { pos: [-9, -5, -8], fabric: false },
-    { pos: [-11, -5, -10], fabric: false },
-    { pos: [-13, -5, -9], fabric: false },
-    { pos: [9, -5, -8], fabric: false },
-    { pos: [11, -5, -9], fabric: false },
-    { pos: [13, -5, -10], fabric: false },
-
-    // Clearing edge - only tree with fabric and far sides
-    { pos: [-3, -5, -3], fabric: true }, // Tree with fabric - only front tree
-    { pos: [-8, -5, -5], fabric: false },
-    { pos: [-10, -5, -6], fabric: false },
-    { pos: [8, -5, -5], fabric: false },
-    { pos: [10, -5, -6], fabric: false }
+    // Tree with fabric - positioned near the fabric clue location
+    { pos: [-8.4, -5, -3.5], fabric: true, scale: 1.2 },
+    // Background trees - spread around the scene
+    { pos: [-12, -5, -8], fabric: false, scale: 1.0 },
+    { pos: [-15, -5, -12], fabric: false, scale: 0.9 },
+    { pos: [3, -5, -10], fabric: false, scale: 1.1 },
+    { pos: [5, -5, -15], fabric: false, scale: 0.8 }
   ];
 
   return (
     <group>
       {treePositions.map((tree, i) => (
-        <Tree key={i} position={tree.pos} hasFabric={tree.fabric} />
+        <Tree
+          key={i}
+          position={tree.pos}
+          hasFabric={tree.fabric}
+          scale={tree.scale}
+        />
       ))}
     </group>
   );
@@ -605,9 +723,31 @@ function ForestEdge() {
  * @param {Object} props
  * @param {Array} props.clues - Array of clue objects from scene data
  * @param {Function} props.onClueClick - Callback when a clue is clicked
+ * @param {Function} props.onObjectClick - Callback when a non-clue object is clicked
  */
-export default function Level1Scene3D({ clues, onClueClick }) {
+export default function Level1Scene3D({ clues, onClueClick, onObjectClick }) {
   const [hoveredClue, setHoveredClue] = useState(null);
+  const [hoveredObject, setHoveredObject] = useState(null);
+  const [devMode] = useState(true); // Set to false in production
+  const [cameraInfo, setCameraInfo] = useState({
+    position: [3.63, -3.38, 4.44],
+    rotation: [0.06, 0.79, -0.04],
+    fov: 60
+  });
+  const [fov, setFov] = useState(60);
+
+  // Dev mode object states
+  const [objectStates, setObjectStates] = useState({
+    campfire: { position: [-0.80, 0, 3], rotation: [0.00, 0.00, 0.00], scale: 1.00 },
+    creeper: { position: [-11.10, -5.10, -15.90], rotation: [0.00, 1.24, 0.00], scale: 1.00 },
+    outpost: { position: [-8.40, -4.90, -1.40], rotation: [0.00, 1.48, 0.00], scale: 1.00 },
+    firewoodStack: { position: [-6.20, -4.90, 0.80], rotation: [0.38, 0.02, 1.10], scale: 2.00 },
+    windowLight1: { position: [-9.50, -3.60, 1.90], rotation: [0, 0, 0], scale: 1 },
+    windowLight2: { position: [-6.80, -4.00, -4.60], rotation: [0, 0, 0], scale: 1 },
+    fabricClue: { position: [-3.00, -4.60, -7.30], rotation: [-83.00, 1.0, 81.0], scale: 1.00 },
+    headphoneClue: { position: [-0.7, -4.98, 0.5], rotation: [0, 0, 0], scale: 1 },
+    footprintsClue: { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 }
+  });
 
   // Find specific clues
   const fabricClue = clues?.find(c => c.id === 'fabric');
@@ -624,20 +764,123 @@ export default function Level1Scene3D({ clues, onClueClick }) {
     document.body.style.cursor = 'auto';
   };
 
+  const handleObjectHover = (objectId) => {
+    setHoveredObject(objectId);
+    document.body.style.cursor = 'pointer';
+  };
+
+  const handleObjectUnhover = () => {
+    setHoveredObject(null);
+    document.body.style.cursor = 'auto';
+  };
+
+  // Handle dev control changes
+  const handleObjectChange = (objectName, changes) => {
+    setObjectStates(prev => ({
+      ...prev,
+      [objectName]: {
+        ...prev[objectName],
+        ...changes
+      }
+    }));
+  };
+
+  // Handle FOV change
+  const handleFovChange = (newFov) => {
+    setFov(newFov);
+  };
+
+  // Create dev controls object list
+  const devControlObjects = devMode ? [
+    {
+      name: 'Campfire',
+      position: objectStates.campfire.position,
+      rotation: objectStates.campfire.rotation,
+      scale: objectStates.campfire.scale,
+      onChange: (changes) => handleObjectChange('campfire', changes)
+    },
+    {
+      name: 'Creeper',
+      position: objectStates.creeper.position,
+      rotation: objectStates.creeper.rotation,
+      scale: objectStates.creeper.scale,
+      onChange: (changes) => handleObjectChange('creeper', changes)
+    },
+    {
+      name: 'Outpost',
+      position: objectStates.outpost.position,
+      rotation: objectStates.outpost.rotation,
+      scale: objectStates.outpost.scale,
+      onChange: (changes) => handleObjectChange('outpost', changes)
+    },
+    {
+      name: 'Firewood Stack',
+      position: objectStates.firewoodStack.position,
+      rotation: objectStates.firewoodStack.rotation,
+      scale: objectStates.firewoodStack.scale,
+      onChange: (changes) => handleObjectChange('firewoodStack', changes)
+    },
+    {
+      name: 'Window Light 1',
+      position: objectStates.windowLight1.position,
+      rotation: objectStates.windowLight1.rotation,
+      scale: objectStates.windowLight1.scale,
+      onChange: (changes) => handleObjectChange('windowLight1', changes)
+    },
+    {
+      name: 'Window Light 2',
+      position: objectStates.windowLight2.position,
+      rotation: objectStates.windowLight2.rotation,
+      scale: objectStates.windowLight2.scale,
+      onChange: (changes) => handleObjectChange('windowLight2', changes)
+    },
+    {
+      name: 'Fabric Clue',
+      position: objectStates.fabricClue.position,
+      rotation: objectStates.fabricClue.rotation,
+      scale: objectStates.fabricClue.scale,
+      onChange: (changes) => handleObjectChange('fabricClue', changes)
+    },
+    {
+      name: 'Headphone Clue',
+      position: objectStates.headphoneClue.position,
+      rotation: objectStates.headphoneClue.rotation,
+      scale: objectStates.headphoneClue.scale,
+      onChange: (changes) => handleObjectChange('headphoneClue', changes)
+    }
+  ] : [];
+
   return (
     <div className="absolute inset-0">
+      {/* Loading Progress Indicator */}
+      <LoadingProgress />
+
+      {/* Dev Controls Panel */}
+      {devMode && (
+        <DevControls
+          cameraPosition={cameraInfo.position}
+          cameraRotation={cameraInfo.rotation}
+          fov={fov}
+          onFovChange={handleFovChange}
+          objects={devControlObjects}
+        />
+      )}
+
       <Canvas
         shadows
         gl={{ antialias: true }}
         style={{ background: 'transparent' }}
       >
         <Suspense fallback={null}>
+          {/* Camera tracking for dev mode */}
+          {devMode && <CameraTracker onUpdate={setCameraInfo} fov={fov} />}
+
           {/* Camera - zoomed in, tilted down 5 degrees */}
           <PerspectiveCamera
             makeDefault
-            position={[0, -3.5, 3.5]}
-            rotation={[-Math.PI / 36, 0, 0]}
-            fov={75}
+            position={cameraInfo.position}
+            rotation={cameraInfo.rotation}
+            fov={fov}
           />
 
           {/* Lighting - night scene (reduced for darker atmosphere) */}
@@ -664,9 +907,31 @@ export default function Level1Scene3D({ clues, onClueClick }) {
 
           {/* Environment elements */}
           <SnowGround />
-          <Outpost />
+          <Outpost
+            position={objectStates.outpost.position}
+            rotation={objectStates.outpost.rotation}
+            scale={objectStates.outpost.scale}
+          />
           <ForestEdge />
-          <Campfire position={[-1.5, 0, 1.5]} />
+          <Creeper
+            position={objectStates.creeper.position}
+            rotation={objectStates.creeper.rotation}
+            scale={objectStates.creeper.scale}
+          />
+          <Campfire
+            position={objectStates.campfire.position}
+            rotation={objectStates.campfire.rotation}
+            scale={objectStates.campfire.scale}
+          />
+          <FirewoodStack
+            position={objectStates.firewoodStack.position}
+            rotation={objectStates.firewoodStack.rotation}
+            scale={objectStates.firewoodStack.scale}
+          />
+
+          {/* Window lights - now controllable */}
+          <pointLight position={objectStates.windowLight1.position} intensity={0.5} distance={4} color="#ffaa00" />
+          <pointLight position={objectStates.windowLight2.position} intensity={0.5} distance={4} color="#ffaa00" />
 
           {/* Interactive footprints - entire path is clickable */}
           {footprintsClue && (
@@ -685,7 +950,9 @@ export default function Level1Scene3D({ clues, onClueClick }) {
           {/* Interactive clues using 3D objects */}
           {fabricClue && (
             <PurpleFabricClue
-              position={[-2.5, -3.5, -2.6]} // Front of tree, visible to player
+              position={objectStates.fabricClue.position}
+              rotation={objectStates.fabricClue.rotation}
+              scale={objectStates.fabricClue.scale}
               collected={fabricClue.collected}
               hovered={hoveredClue === 'fabric'}
               onHover={() => handleHover('fabric')}
@@ -699,7 +966,9 @@ export default function Level1Scene3D({ clues, onClueClick }) {
 
           {headphoneClue && (
             <HeadphoneJackClue
-              position={[-0.7, -4.98, 0.5]} // Between campfire and footprints
+              position={objectStates.headphoneClue.position}
+              rotation={objectStates.headphoneClue.rotation}
+              scale={objectStates.headphoneClue.scale}
               collected={headphoneClue.collected}
               hovered={hoveredClue === 'headphone'}
               onHover={() => handleHover('headphone')}
@@ -710,6 +979,9 @@ export default function Level1Scene3D({ clues, onClueClick }) {
               }}
             />
           )}
+
+          {/* Dev mode orbit controls */}
+          {devMode && <OrbitControls makeDefault />}
         </Suspense>
       </Canvas>
     </div>

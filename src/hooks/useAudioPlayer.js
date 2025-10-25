@@ -10,11 +10,13 @@ export default function useAudioPlayer() {
   const isUnlockedRef = useRef(false);
   const playQueueRef = useRef([]);
   const isProcessingRef = useRef(false);
+  const isMutedRef = useRef(false);
 
   useEffect(() => {
     // Create a single audio element to reuse
     audioRef.current = new Audio();
     audioRef.current.preload = 'auto'; // Ensure audio preloads properly
+    audioRef.current.muted = false; // Start unmuted
 
     return () => {
       // Cleanup on unmount
@@ -146,11 +148,53 @@ export default function useAudioPlayer() {
     return currentAudioRef.current;
   }, []);
 
+  /**
+   * Mute audio
+   */
+  const mute = useCallback(() => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = true;
+    isMutedRef.current = true;
+  }, []);
+
+  /**
+   * Unmute audio
+   */
+  const unmute = useCallback(() => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = false;
+    isMutedRef.current = false;
+  }, []);
+
+  /**
+   * Toggle mute state
+   * @returns {Boolean} New muted state
+   */
+  const toggleMute = useCallback(() => {
+    if (!audioRef.current) return isMutedRef.current;
+    const newMutedState = !isMutedRef.current;
+    audioRef.current.muted = newMutedState;
+    isMutedRef.current = newMutedState;
+    return newMutedState;
+  }, []);
+
+  /**
+   * Check if audio is muted
+   * @returns {Boolean}
+   */
+  const isMuted = useCallback(() => {
+    return isMutedRef.current;
+  }, []);
+
   return {
     play,
     stop,
     isPlaying,
     getCurrentAudio,
-    unlock
+    unlock,
+    mute,
+    unmute,
+    toggleMute,
+    isMuted
   };
 }

@@ -17,7 +17,8 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
     all_clues: false
   });
 
-  const { play, unlock } = useAudioPlayer();
+  const { play, unlock, toggleMute, isMuted } = useAudioPlayer();
+  const [muted, setMuted] = useState(false);
   const scene = currentScene < SCENES.length ? SCENES[currentScene] : null;
   const isVictory = currentScene >= SCENES.length;
 
@@ -57,8 +58,8 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
   const { isLoading, progress } = useAssetLoader(
     scene ? audioFiles : [],
     scene ? [
-      'https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg',
-      'https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg'
+      '/images/lroc_color_poles_1k.jpg',
+      '/images/ldem_3_8bit.jpg'
     ] : []
   );
 
@@ -106,22 +107,27 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
     }
   }, [assetsLoaded, currentScene, scene, play]);
 
-  // Handle clue click
-  const handleClueClick = (clickedClue) => {
-    // Check if this is the very first click (show HowTo tutorial)
-    const isFirstClick = !tutorialShown.first_click && collectedClues.length === 0;
-
-    if (isFirstClick && scene.tutorials) {
+  // Handle non-clue object click (for tutorial)
+  const handleObjectClick = () => {
+    // Show HowTo tutorial only on first click of a non-clue object
+    if (!tutorialShown.first_click && scene.tutorials) {
       const tutorial = scene.tutorials.find(t => t.trigger === 'first_click');
       if (tutorial) {
         setNarrationText(tutorial.text);
         play(tutorial.audio);
         setTutorialShown(prev => ({ ...prev, first_click: true }));
-        // Don't process the clue yet, just show the tutorial
-        return;
       }
     }
+  };
 
+  // Handle mute toggle
+  const handleMuteToggle = () => {
+    const newMutedState = toggleMute();
+    setMuted(newMutedState);
+  };
+
+  // Handle clue click
+  const handleClueClick = (clickedClue) => {
     // Update clue state
     const updatedClues = clues.map(clue =>
       clue.id === clickedClue.id ? { ...clue, collected: true } : clue
@@ -260,7 +266,7 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
   return (
     <div className="absolute inset-0 overflow-hidden bg-gradient-to-b from-[#0a1628] via-[#1a2847] to-[#2a3856]">
       {/* 3D Scene */}
-      <Level1Scene3D clues={clues} onClueClick={handleClueClick} />
+      <Level1Scene3D clues={clues} onClueClick={handleClueClick} onObjectClick={handleObjectClick} />
 
       {/* Collected Clues Sidebar */}
       <CluesSidebar
@@ -318,18 +324,33 @@ export default function GameScreen({ currentScene, onSceneComplete, onGameComple
       )}
 
       {/* Return to Menu Button */}
-      <button
-        onClick={onReturnToMenu}
-        className="absolute top-4 left-4 px-4 py-2 text-sm font-bold text-white
-          bg-gradient-to-br from-gray-600 to-gray-800
-          border-2 border-white/50 rounded-lg
-          shadow-[0_4px_12px_rgba(0,0,0,0.4)]
-          transition-all duration-300
-          hover:from-gray-500 hover:to-gray-700 hover:border-white
-          z-[15]"
-      >
-        Menu
-      </button>
+      {/* Top-left UI buttons */}
+      <div className="absolute top-4 left-4 flex gap-2 z-[15]">
+        <button
+          onClick={onReturnToMenu}
+          className="px-4 py-2 text-sm font-bold text-white
+            bg-gradient-to-br from-gray-600 to-gray-800
+            border-2 border-white/50 rounded-lg
+            shadow-[0_4px_12px_rgba(0,0,0,0.4)]
+            transition-all duration-300
+            hover:from-gray-500 hover:to-gray-700 hover:border-white"
+        >
+          Menu
+        </button>
+
+        <button
+          onClick={handleMuteToggle}
+          className="px-4 py-2 text-sm font-bold text-white
+            bg-gradient-to-br from-gray-600 to-gray-800
+            border-2 border-white/50 rounded-lg
+            shadow-[0_4px_12px_rgba(0,0,0,0.4)]
+            transition-all duration-300
+            hover:from-gray-500 hover:to-gray-700 hover:border-white"
+          title={muted ? "Unmute audio" : "Mute audio"}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
+      </div>
     </div>
   );
 }

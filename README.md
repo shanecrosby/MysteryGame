@@ -4,8 +4,8 @@ A web-based point-and-click mystery game for children aged 5-7, built with Three
 
 ## Features
 
-- Beautiful night-time scene with animated stars and moon
-- Icicle decorations framing the screen
+- Beautiful night-time scene with snowy landscape, detailed trees and fully textured moon
+- Self-emissive icicle decorations framing the screen, glowing from within.
 - Interactive mystery storyline following footprints to a cave
 - Three clues to collect per scene. Scene only advances once all clues collected.
 - Design optimised for 1080p display.

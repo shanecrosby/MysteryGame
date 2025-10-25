@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(npm run dev)",
-      "Bash(timeout 5 bash -c \"sleep 5\")"
+      "Bash(timeout 5 bash -c \"sleep 5\")",
+      "Bash(while read f)",
+      "Bash(do echo \"$f:\")",
+      "Bash(identify:*)",
+      "Bash(done)",
+      "Bash(python convert_textures.py:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout 10 bash:*)"
     ],
     "deny": [],
     "ask": []
