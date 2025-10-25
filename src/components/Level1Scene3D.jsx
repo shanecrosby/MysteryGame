@@ -490,7 +490,7 @@ useGLTF.preload('/models/log/log.glb');
 
 // Creeper - hidden in the forest
 function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF('/models/creeper/creeper.glb');
+  const { scene } = useGLTF('/models/creeper/Creeper.glb');
 
   // Clone and configure creeper (textures embedded in model)
   const creeperModel = useMemo(() => {
@@ -517,7 +517,7 @@ function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
 }
 
 // Preload the creeper model
-useGLTF.preload('/models/creeper/creeper.glb');
+useGLTF.preload('/models/creeper/Creeper.glb');
 
 // Tree with purple fabric attached - using LowPolyTreePack.glb (9 variants)
 function Tree({ position, hasFabric = false, scale = 1, variant = 0 }) {

@@ -279,59 +279,38 @@ function Moon() {
   );
 }
 
-// Tree component for menu scene - using TreeSet2/PineTree.glb
-function Tree({ position, scale = 1 }) {
-  const { scene } = useGLTF('/models/TreeSet2/PineTree.glb');
+// Tree component for menu scene - using LowPolyTreePack.glb
+function Tree({ position, scale = 1, variant = 0 }) {
+  const { scene, nodes } = useGLTF('/models/trees/LowPolyTreePack.glb');
 
-  // Load tree textures
-  const [barkTexture, leavesTexture] = useMemo(() => {
-    const textureLoader = new THREE.TextureLoader();
-    const bark = textureLoader.load('/models/TreeSet2/Textures/BarkDecidious0194_7_S.jpg');
-    const leaves = textureLoader.load('/models/TreeSet2/Textures/Leaves0142_4_S.png');
+  // Get all tree nodes from the pack (there are 9 variants)
+  const treeVariants = useMemo(() => {
+    const variants = [];
+    Object.keys(nodes).forEach(key => {
+      if (nodes[key].type === 'Mesh' || nodes[key].type === 'Group') {
+        variants.push(nodes[key]);
+      }
+    });
+    return variants;
+  }, [nodes]);
 
-    // Set proper encoding
-    bark.encoding = THREE.sRGBEncoding;
-    leaves.encoding = THREE.sRGBEncoding;
-
-    return [bark, leaves];
-  }, []);
+  // Select tree variant
+  const selectedTree = treeVariants[variant % treeVariants.length] || scene;
 
   // Clone the tree model
   const treeModel = useMemo(() => {
-    const clone = scene.clone();
+    const clone = selectedTree.clone ? selectedTree.clone() : scene.clone();
 
     // Ensure materials are properly set up and shadows enabled
     clone.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-
-        if (child.material) {
-          child.material = child.material.clone();
-
-          // Apply textures based on material properties
-          const matName = child.material.name?.toLowerCase() || '';
-
-          if (matName.includes('bark') || matName.includes('trunk') || matName.includes('wood')) {
-            child.material.map = barkTexture;
-            child.material.roughness = 0.9;
-            child.material.metalness = 0;
-          } else if (matName.includes('leaf') || matName.includes('leaves') || matName.includes('needle')) {
-            child.material.map = leavesTexture;
-            child.material.transparent = true;
-            child.material.alphaTest = 0.5;
-            child.material.side = THREE.DoubleSide;
-            child.material.roughness = 0.8;
-            child.material.metalness = 0;
-          }
-
-          child.material.needsUpdate = true;
-        }
       }
     });
 
     return clone;
-  }, [scene, position, barkTexture, leavesTexture]);
+  }, [selectedTree, scene]);
 
   return (
     <group position={position}>
@@ -344,7 +323,7 @@ function Tree({ position, scale = 1 }) {
 }
 
 // Preload the tree model
-useGLTF.preload('/models/TreeSet2/PineTree.glb');
+useGLTF.preload('/models/trees/LowPolyTreePack.glb');
 
 // Floating forest spirit lights
 function ForestSprites() {
@@ -443,14 +422,16 @@ function Forest() {
       const xLeft = -8 - Math.random() * 8 + pathOffset;
       treePositions.push({
         pos: [xLeft, getTerrainHeight(xLeft, z), z],
-        scale: 0.7 + Math.random() * 0.4
+        scale: 0.7 + Math.random() * 0.4,
+        variant: Math.floor(Math.random() * 9)
       });
 
       // Right cluster
       const xRight = 8 + Math.random() * 8 + pathOffset;
       treePositions.push({
         pos: [xRight, getTerrainHeight(xRight, z), z],
-        scale: 0.7 + Math.random() * 0.4
+        scale: 0.7 + Math.random() * 0.4,
+        variant: Math.floor(Math.random() * 9)
       });
     }
 
@@ -463,14 +444,16 @@ function Forest() {
       const xLeft = -6 - Math.random() * 6 + pathOffset;
       treePositions.push({
         pos: [xLeft, getTerrainHeight(xLeft, z), z],
-        scale: 0.8 + Math.random() * 0.5
+        scale: 0.8 + Math.random() * 0.5,
+        variant: Math.floor(Math.random() * 9)
       });
 
       // Right cluster
       const xRight = 6 + Math.random() * 6 + pathOffset;
       treePositions.push({
         pos: [xRight, getTerrainHeight(xRight, z), z],
-        scale: 0.8 + Math.random() * 0.5
+        scale: 0.8 + Math.random() * 0.5,
+        variant: Math.floor(Math.random() * 9)
       });
     }
 
@@ -484,7 +467,8 @@ function Forest() {
       if (Math.abs(xLeft - pathOffset) > pathWidth / 2) {
         treePositions.push({
           pos: [xLeft, getTerrainHeight(xLeft, z), z],
-          scale: 0.9 + Math.random() * 0.5
+          scale: 0.9 + Math.random() * 0.5,
+          variant: Math.floor(Math.random() * 9)
         });
       }
 
@@ -493,7 +477,8 @@ function Forest() {
       if (Math.abs(xRight - pathOffset) > pathWidth / 2) {
         treePositions.push({
           pos: [xRight, getTerrainHeight(xRight, z), z],
-          scale: 0.9 + Math.random() * 0.5
+          scale: 0.9 + Math.random() * 0.5,
+          variant: Math.floor(Math.random() * 9)
         });
       }
     }
@@ -508,7 +493,8 @@ function Forest() {
       if (Math.abs(xLeft - pathOffset) > pathWidth / 2) {
         treePositions.push({
           pos: [xLeft, getTerrainHeight(xLeft, z), z],
-          scale: 1.0 + Math.random() * 0.6
+          scale: 1.0 + Math.random() * 0.6,
+          variant: Math.floor(Math.random() * 9)
         });
       }
 
@@ -517,7 +503,8 @@ function Forest() {
       if (Math.abs(xRight - pathOffset) > pathWidth / 2) {
         treePositions.push({
           pos: [xRight, getTerrainHeight(xRight, z), z],
-          scale: 1.0 + Math.random() * 0.6
+          scale: 1.0 + Math.random() * 0.6,
+          variant: Math.floor(Math.random() * 9)
         });
       }
     }
@@ -528,7 +515,7 @@ function Forest() {
   return (
     <group>
       {trees.map((tree, i) => (
-        <Tree key={i} position={tree.pos} scale={tree.scale} />
+        <Tree key={i} position={tree.pos} scale={tree.scale} variant={tree.variant || 0} />
       ))}
     </group>
   );
