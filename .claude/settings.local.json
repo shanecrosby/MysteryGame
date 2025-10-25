@@ -9,7 +9,8 @@
       "Bash(done)",
       "Bash(python convert_textures.py:*)",
       "Bash(powershell -Command:*)",
-      "Bash(timeout 10 bash:*)"
+      "Bash(timeout 10 bash:*)",
+      "Bash(xcopy:*)"
     ],
     "deny": [],
     "ask": []

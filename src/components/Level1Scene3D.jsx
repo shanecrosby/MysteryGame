@@ -169,29 +169,11 @@ function Moon() {
   );
 }
 
-// Snowy Cottage - Using House_1.glb model (compressed)
+// Snowy Cottage - Using wood_house.glb model (low-poly)
 function Outpost({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF('/models/house/House_1.glb');
+  const { scene } = useGLTF('/models/house/wood_house.glb');
 
-  // Load house textures (optimized WebP versions)
-  const [colorMap, normalMap, roughnessMap, color3Map, normal3Map, rough3Map] = useMemo(() => {
-    const textureLoader = new THREE.TextureLoader();
-
-    const color = textureLoader.load('/models/house/Atlas_Color.webp');
-    const normal = textureLoader.load('/models/house/Atlas_Norm.webp');
-    const rough = textureLoader.load('/models/house/Atlas_Rough.webp');
-    const color3 = textureLoader.load('/models/house/Atlas_3_Color.webp');
-    const normal3 = textureLoader.load('/models/house/Atlas_3_Norm.webp');
-    const rough3 = textureLoader.load('/models/house/Atlas_3_Rough.webp');
-
-    // Set proper encoding
-    color.encoding = THREE.sRGBEncoding;
-    color3.encoding = THREE.sRGBEncoding;
-
-    return [color, normal, rough, color3, normal3, rough3];
-  }, []);
-
-  // Clone house and apply textures
+  // Clone house and enable shadows (textures are embedded in the model)
   const houseModel = useMemo(() => {
     const clone = scene.clone();
 
@@ -199,28 +181,11 @@ function Outpost({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-
-        if (child.material) {
-          child.material = child.material.clone();
-
-          // Apply textures based on material name or index
-          if (child.material.name && child.material.name.includes('3')) {
-            child.material.map = color3Map;
-            child.material.normalMap = normal3Map;
-            child.material.roughnessMap = rough3Map;
-          } else {
-            child.material.map = colorMap;
-            child.material.normalMap = normalMap;
-            child.material.roughnessMap = roughnessMap;
-          }
-
-          child.material.needsUpdate = true;
-        }
       }
     });
 
     return clone;
-  }, [scene, colorMap, normalMap, roughnessMap, color3Map, normal3Map, rough3Map]);
+  }, [scene]);
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
@@ -239,7 +204,7 @@ function Outpost({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
 }
 
 // Preload the house model
-useGLTF.preload('/models/house/House_1.glb');
+useGLTF.preload('/models/house/wood_house.glb');
 
 // Snow ground with subtle perlin noise texture
 function SnowGround() {
@@ -474,21 +439,7 @@ useGLTF.preload('/models/firepit/stone_fire_pit_4k.glb');
 
 // Firewood Stack - logs stacked beside the house
 function FirewoodStack({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF('/models/log/log1_1.8k.glb');
-
-  // Load log textures
-  const [diffuseMap, normalMap, roughnessMap, aoMap] = useMemo(() => {
-    const textureLoader = new THREE.TextureLoader();
-
-    const diffuse = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_diffuse.webp');
-    const normal = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_normal.webp');
-    const rough = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_roughness.webp');
-    const ao = textureLoader.load('/models/log/textures/log1_1.8k_u0_v0_ao.webp');
-
-    diffuse.encoding = THREE.sRGBEncoding;
-
-    return [diffuse, normal, rough, ao];
-  }, []);
+  const { scene } = useGLTF('/models/log/log.glb');
 
   // Create multiple log instances for the stack
   const logPositions = useMemo(() => [
@@ -514,20 +465,11 @@ function FirewoodStack({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
-
-              if (child.material) {
-                child.material = child.material.clone();
-                child.material.map = diffuseMap;
-                child.material.normalMap = normalMap;
-                child.material.roughnessMap = roughnessMap;
-                child.material.aoMap = aoMap;
-                child.material.needsUpdate = true;
-              }
             }
           });
 
           return clone;
-        }, [scene, diffuseMap, normalMap, roughnessMap, aoMap]);
+        }, []);
 
         return (
           <primitive
@@ -535,7 +477,7 @@ function FirewoodStack({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }
             object={logModel}
             position={logData.pos}
             rotation={logData.rot}
-            scale={0.00005 * scale}
+            scale={scale}
           />
         );
       })}
@@ -544,21 +486,13 @@ function FirewoodStack({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }
 }
 
 // Preload the log model
-useGLTF.preload('/models/log/log1_1.8k.glb');
+useGLTF.preload('/models/log/log.glb');
 
 // Creeper - hidden in the forest
 function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF('/models/creeper/Creeper.glb');
+  const { scene } = useGLTF('/models/creeper/creeper.glb');
 
-  // Load creeper texture
-  const texture = useMemo(() => {
-    const textureLoader = new THREE.TextureLoader();
-    const tex = textureLoader.load('/models/creeper/creeper.png');
-    tex.encoding = THREE.sRGBEncoding;
-    return tex;
-  }, []);
-
-  // Clone and configure creeper
+  // Clone and configure creeper (textures embedded in model)
   const creeperModel = useMemo(() => {
     const clone = scene.clone();
 
@@ -566,17 +500,11 @@ function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-
-        if (child.material) {
-          child.material = child.material.clone();
-          child.material.map = texture;
-          child.material.needsUpdate = true;
-        }
       }
     });
 
     return clone;
-  }, [scene, texture]);
+  }, [scene]);
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
@@ -589,67 +517,46 @@ function Creeper({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }) {
 }
 
 // Preload the creeper model
-useGLTF.preload('/models/creeper/Creeper.glb');
+useGLTF.preload('/models/creeper/creeper.glb');
 
-// Tree with purple fabric attached - using TreeSet2/PineTree.glb
-function Tree({ position, hasFabric = false, scale = 1 }) {
-  const { scene } = useGLTF('/models/TreeSet2/PineTree.glb');
+// Tree with purple fabric attached - using LowPolyTreePack.glb (9 variants)
+function Tree({ position, hasFabric = false, scale = 1, variant = 0 }) {
+  const { scene, nodes } = useGLTF('/models/trees/LowPolyTreePack.glb');
 
-  // Load tree textures
-  const [barkTexture, leavesTexture] = useMemo(() => {
-    const textureLoader = new THREE.TextureLoader();
-    const bark = textureLoader.load('/models/TreeSet2/Textures/BarkDecidious0194_7_S.jpg');
-    const leaves = textureLoader.load('/models/TreeSet2/Textures/Leaves0142_4_S.png');
+  // Get all tree nodes from the pack (there are 9 variants)
+  const treeVariants = useMemo(() => {
+    const variants = [];
+    Object.keys(nodes).forEach(key => {
+      if (nodes[key].type === 'Mesh' || nodes[key].type === 'Group') {
+        variants.push(nodes[key]);
+      }
+    });
+    return variants;
+  }, [nodes]);
 
-    // Set proper encoding
-    bark.encoding = THREE.sRGBEncoding;
-    leaves.encoding = THREE.sRGBEncoding;
+  // Select tree variant (default to 0, or random if variant not specified)
+  const selectedTree = treeVariants[variant % treeVariants.length] || scene;
 
-    return [bark, leaves];
-  }, []);
-
-  // Clone the tree model
+  // Clone the selected tree model
   const treeModel = useMemo(() => {
-    const clone = scene.clone();
+    const clone = selectedTree.clone ? selectedTree.clone() : scene.clone();
 
     // Ensure materials are properly set up and shadows enabled
     clone.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-
-        if (child.material) {
-          child.material = child.material.clone();
-
-          // Apply textures based on material properties
-          const matName = child.material.name?.toLowerCase() || '';
-
-          if (matName.includes('bark') || matName.includes('trunk') || matName.includes('wood')) {
-            child.material.map = barkTexture;
-            child.material.roughness = 0.9;
-            child.material.metalness = 0;
-          } else if (matName.includes('leaf') || matName.includes('leaves') || matName.includes('needle')) {
-            child.material.map = leavesTexture;
-            child.material.transparent = true;
-            child.material.alphaTest = 0.5;
-            child.material.side = THREE.DoubleSide;
-            child.material.roughness = 0.8;
-            child.material.metalness = 0;
-          }
-
-          child.material.needsUpdate = true;
-        }
       }
     });
 
     return clone;
-  }, [scene, position, barkTexture, leavesTexture]);
+  }, [selectedTree, scene]);
 
   return (
     <group position={position}>
       <primitive
         object={treeModel}
-        scale={0.65 * scale}
+        scale={scale}
         position={[0, 0, 0]}
       />
 
@@ -665,7 +572,7 @@ function Tree({ position, hasFabric = false, scale = 1 }) {
 }
 
 // Preload the tree model
-useGLTF.preload('/models/TreeSet2/PineTree.glb');
+useGLTF.preload('/models/trees/LowPolyTreePack.glb');
 
 // Camera tracker component - updates state with camera position
 function CameraTracker({ onUpdate, fov }) {
@@ -690,18 +597,26 @@ function CameraTracker({ onUpdate, fov }) {
   return null;
 }
 
-// Forest edge - creating atmosphere with 5 trees
-// Positioned to avoid house (-8.4, -4.9, -1.4) and campfire (-0.8, -0.1, 2.4)
-// One tree positioned near fabric clue (-8.4, -7.7, -2.4)
+// Forest edge - creating atmosphere with trees
+// Positioned to avoid house and campfire
+// Scattered on left and right sides, with path down the center
 function ForestEdge() {
   const treePositions = [
-    // Tree with fabric - positioned near the fabric clue location
-    { pos: [-8.4, -5, -3.5], fabric: true, scale: 1.2 },
-    // Background trees - spread around the scene
-    { pos: [-12, -5, -8], fabric: false, scale: 1.0 },
-    { pos: [-15, -5, -12], fabric: false, scale: 0.9 },
-    { pos: [3, -5, -10], fabric: false, scale: 1.1 },
-    { pos: [5, -5, -15], fabric: false, scale: 0.8 }
+    // Left forest cluster
+    { pos: [-8, -5, -5], fabric: false, scale: 1.2, variant: 0 }, // Large tree
+    { pos: [-10, -5, -3], fabric: false, scale: 0.9, variant: 1 },
+    { pos: [-12, -5, -6], fabric: false, scale: 1.0, variant: 2 },
+    { pos: [-9, -5, -8], fabric: false, scale: 0.8, variant: 3 },
+    { pos: [-14, -5, -10], fabric: false, scale: 1.1, variant: 4 },
+    { pos: [-11, -5, -12], fabric: false, scale: 0.9, variant: 5 },
+
+    // Right forest cluster
+    { pos: [8, -5, -5], fabric: false, scale: 1.0, variant: 6 },
+    { pos: [10, -5, -3], fabric: false, scale: 0.85, variant: 7 },
+    { pos: [12, -5, -7], fabric: false, scale: 1.15, variant: 8 },
+    { pos: [9, -5, -9], fabric: false, scale: 0.95, variant: 1 },
+    { pos: [14, -5, -11], fabric: false, scale: 1.05, variant: 2 },
+    { pos: [11, -5, -13], fabric: false, scale: 0.9, variant: 3 },
   ];
 
   return (
@@ -712,6 +627,7 @@ function ForestEdge() {
           position={tree.pos}
           hasFabric={tree.fabric}
           scale={tree.scale}
+          variant={tree.variant}
         />
       ))}
     </group>
@@ -730,22 +646,33 @@ export default function Level1Scene3D({ clues, onClueClick, onObjectClick }) {
   const [hoveredObject, setHoveredObject] = useState(null);
   const [devMode] = useState(true); // Set to false in production
   const [cameraInfo, setCameraInfo] = useState({
-    position: [3.63, -3.38, 4.44],
-    rotation: [0.06, 0.79, -0.04],
-    fov: 60
+    // Camera positioned for 1.2m tall child looking toward forest path
+    // Height: -3.8 (1.2m above ground at y=-5)
+    // Position: at player position (0, -3.8, 5) looking forward into scene
+    position: [0, -3.8, 5],
+    rotation: [-0.1, 0, 0], // Looking slightly down
+    fov: 75
   });
-  const [fov, setFov] = useState(60);
+  const [fov, setFov] = useState(75);
 
-  // Dev mode object states
+  // Dev mode object states - positioned per layout diagram
   const [objectStates, setObjectStates] = useState({
-    campfire: { position: [-0.80, 0, 3], rotation: [0.00, 0.00, 0.00], scale: 1.00 },
-    creeper: { position: [-11.10, -5.10, -15.90], rotation: [0.00, 1.24, 0.00], scale: 1.00 },
-    outpost: { position: [-8.40, -4.90, -1.40], rotation: [0.00, 1.48, 0.00], scale: 1.00 },
-    firewoodStack: { position: [-6.20, -4.90, 0.80], rotation: [0.38, 0.02, 1.10], scale: 2.00 },
-    windowLight1: { position: [-9.50, -3.60, 1.90], rotation: [0, 0, 0], scale: 1 },
-    windowLight2: { position: [-6.80, -4.00, -4.60], rotation: [0, 0, 0], scale: 1 },
-    fabricClue: { position: [-3.00, -4.60, -7.30], rotation: [-83.00, 1.0, 81.0], scale: 1.00 },
-    headphoneClue: { position: [-0.7, -4.98, 0.5], rotation: [0, 0, 0], scale: 1 },
+    // Campfire in front/center of clearing (yellow dot in diagram)
+    campfire: { position: [0, -5, 0], rotation: [0, 0, 0], scale: 1.00 },
+    // Creeper hidden deep in right forest
+    creeper: { position: [15, -5, -15], rotation: [0, 1.24, 0], scale: 1.00 },
+    // House/outpost in upper left (brown rectangle in diagram)
+    outpost: { position: [-8, -4.9, -5], rotation: [0, 0.8, 0], scale: 1.00 },
+    // Firewood stack near house (green in diagram)
+    firewoodStack: { position: [-6, -4.9, -3], rotation: [0, 0, 0], scale: 1.00 },
+    // Window lights - positioned relative to house
+    windowLight1: { position: [-9, -3.5, -4], rotation: [0, 0, 0], scale: 1 },
+    windowLight2: { position: [-7, -3.5, -6], rotation: [0, 0, 0], scale: 1 },
+    // Fabric clue near house/forest edge (purple in diagram)
+    fabricClue: { position: [-8, -4.5, -3], rotation: [0, 0, 0], scale: 1.00 },
+    // Headphone clue in clearing (black dot in diagram)
+    headphoneClue: { position: [2, -4.9, 1], rotation: [0, 0, 0], scale: 1 },
+    // Footprints path starting from clearing going into forest
     footprintsClue: { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 }
   });
 
